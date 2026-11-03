@@ -1,0 +1,21 @@
+apiVersion: v2
+name: regubom
+description: ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway (Air-Gapped & Sovereign Compliant)
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+keywords:
+  - regubom
+  - sbom
+  - cyclonedx
+  - spdx
+  - cra
+  - enisa
+  - bsi-tr-03183
+  - cisa
+  - airgap
+  - sovereign
+home: https://regubom.internal
+maintainers:
+  - name: ReguBOM Engineering
+    email: support@regubom.internal

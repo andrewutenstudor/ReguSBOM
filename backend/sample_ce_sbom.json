@@ -1,0 +1,72 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-11-01T12:00:00Z",
+    "lifecycles": [
+      {
+        "phase": "build"
+      }
+    ],
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "ReguBOM CE",
+          "version": "2.0.0"
+        }
+      ]
+    },
+    "authors": [
+      {
+        "name": "SecOps Lead",
+        "email": "secops@corp.local"
+      }
+    ],
+    "component": {
+      "name": "regubom-core-service",
+      "version": "1.0.0",
+      "type": "application",
+      "bom-ref": "pkg:generic/regubom-core-service@1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "curl",
+      "version": "8.7.1",
+      "bom-ref": "pkg:generic/curl@8.7.1",
+      "purl": "pkg:generic/curl@8.7.1",
+      "supplier": {
+        "name": "curl Project"
+      },
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "curl"
+          }
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:generic/regubom-core-service@1.0.0",
+      "dependsOn": [
+        "pkg:generic/curl@8.7.1"
+      ]
+    },
+    {
+      "ref": "pkg:generic/curl@8.7.1",
+      "dependsOn": []
+    }
+  ]
+}

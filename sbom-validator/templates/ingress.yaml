@@ -1,0 +1,46 @@
+{{- if .Values.ingress.enabled -}}
+{{- $fullName := include "sbom-validator.fullname" . -}}
+{{- $backendSvcName := include "sbom-validator.backend.fullname" . -}}
+{{- $backendPort := .Values.backend.service.port -}}
+{{- $frontendSvcName := include "sbom-validator.frontend.fullname" . -}}
+{{- $frontendPort := .Values.frontend.service.port -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "sbom-validator.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ if eq .service "backend" }}{{ $backendSvcName }}{{ else }}{{ $frontendSvcName }}{{ end }}
+                port:
+                  number: {{ if eq .service "backend" }}{{ $backendPort }}{{ else }}{{ $frontendPort }}{{ end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,62 @@
+version: '3.8'
+
+# ==============================================================================
+# ReguBOM Community Edition (CE) — Docker Compose
+# Open Source, Apache 2.0 Standalone Regulatory Gateway
+# SQLite Embedded Storage (No PostgreSQL external dependency required)
+# ==============================================================================
+
+services:
+  # ReguBOM Community Edition Regulatory Engine & API (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.ce
+    container_name: regubom-ce-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ce_data:/app/data
+      - ce_uploads:/app/uploads
+      - ce_reports:/app/reports
+    environment:
+      - DATABASE_URL=sqlite:///./data/regubom_ce.db
+      - UPLOAD_DIR=/app/uploads
+      - REPORT_DIR=/app/reports
+      - MAX_FILE_SIZE_MB=500
+      - DEFAULT_PROPRIETARY_PREFIX=regubom:proprietary
+      - ALLOWED_HOSTS=*
+      - HOST=0.0.0.0
+      - PORT=8000
+    restart: unless-stopped
+    networks:
+      regubom-ce-network:
+        aliases:
+          - backend
+          - regubom-backend
+
+  # ReguBOM Community Edition Frontend (React + Vite + Nginx Reverse Proxy)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.ce
+    container_name: regubom-ce-frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - regubom-ce-network
+
+volumes:
+  ce_data:
+    driver: local
+  ce_uploads:
+    driver: local
+  ce_reports:
+    driver: local
+
+networks:
+  regubom-ce-network:
+    driver: bridge

@@ -1,0 +1,290 @@
+# ==============================================================================
+# ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
+# Helm Chart Default Values
+# Compliant with: ENISA Technical Advisory (Oct 2026), BSI TR-03183-2, CISA 2026,
+# CRA (Art. 13 & Annex II), OpenShift restricted-v2 SCC, RKE2 Hardened CIS.
+# ==============================================================================
+
+# Global Configurations
+global:
+  # When true, strictly disables any external network requests, public image pulls,
+  # remote schema downloads, and telemetry. Enforces 100% offline sovereign operation.
+  airgapped: true
+
+  # Global image registry override (e.g., "registry.airgap.local:5000/regubom" or "harbor.corp:8443")
+  # If specified, this is prepended to all pod container image repositories.
+  imageRegistry: ""
+
+  # Global pull secret references for authenticated private registries
+  imagePullSecrets: []
+
+# Image registry domain override (can also be set at global.imageRegistry)
+imageRegistry: ""
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ------------------------------------------------------------------------------
+# RBAC & Pod Security Standards (OpenShift / RKE2 / Kubernetes Hardened)
+# ------------------------------------------------------------------------------
+securityContext:
+  # Pod-level security context enforcing non-root UID 10001
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  # Container-level security context enforcing least privilege
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  capabilities:
+    drop:
+      - ALL
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # Disable automatic service account token mounting for zero-trust posture
+  automountServiceAccountToken: false
+
+# ------------------------------------------------------------------------------
+# ReguBOM Backend (FastAPI + Python 3.12 + ENISA / BSI / CISA Audit Engine)
+# ------------------------------------------------------------------------------
+backend:
+  replicaCount: 1
+
+  image:
+    repository: "regubom-backend"
+    tag: "v2.0.0"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  # Application Configuration & Environment Variables
+  env:
+    # Max file upload size in MB (sized for 100MB+ monolithic firmware/container SBOMs)
+    MAX_FILE_SIZE_MB: "500"
+    ALLOWED_HOSTS: "*"
+    HOST: "0.0.0.0"
+    PORT: "8000"
+    # Configurable tenant property prefix for first-party component classification
+    FIRST_PARTY_PROPERTY_PREFIX: "regubom:proprietary"
+    # Storage directories inside container volume
+    UPLOAD_DIR: "/app/data/uploads"
+    REPORT_DIR: "/app/data/reports"
+    LICENSE_PATH: "/app/data/license.lic"
+    # Strict air-gap enforcement flags
+    TELEMETRY_ENABLED: "false"
+    AIRGAP_AUTHORIZED: "true"
+
+  # Secrets configuration
+  secrets:
+    existingSecret: ""
+    jwtSecretKey: "regubom_jwt_secret_token_change_in_production"
+    jwtAlgorithm: "HS256"
+    jwtExpireMinutes: "480"
+
+  # Hardware resource allocations
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+  livenessProbe:
+    httpGet:
+      path: /api/health
+      port: 8000
+    initialDelaySeconds: 20
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /api/health
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ------------------------------------------------------------------------------
+# ReguBOM Frontend (React 18 + Vite + Tailwind + Unprivileged Nginx)
+# ------------------------------------------------------------------------------
+frontend:
+  # Stateless frontend - horizontally scalable
+  replicaCount: 2
+
+  image:
+    repository: "regubom-frontend"
+    tag: "v2.0.0"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+
+  # Container port (unprivileged 8080 for non-root UID 10001 execution)
+  containerPort: 8080
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ------------------------------------------------------------------------------
+# PostgreSQL Database (Internal StatefulSet vs External Managed Instance)
+# ------------------------------------------------------------------------------
+postgresql:
+  # When true: deploys an internal enterprise PostgreSQL 16 StatefulSet with PVC
+  # When false: connects to external database defined in postgresql.externalDatabase
+  enabled: true
+
+  image:
+    repository: "postgres"
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+
+  auth:
+    database: "regubom"
+    username: "regubom"
+    password: "regubom_secure_master_password_change_me"
+    existingSecret: ""
+    existingSecretPasswordKey: "password"
+
+  service:
+    type: ClusterIP
+    port: 5432
+
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    storageClass: ""
+    annotations: {}
+
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+  securityContext:
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    runAsNonRoot: true
+
+  # External Database Configuration (Used when postgresql.enabled is false)
+  externalDatabase:
+    # Full connection string (e.g. "postgresql://user:pass@db.internal:5432/regubom")
+    url: ""
+    # OR point to a pre-existing Kubernetes Secret containing the connection string
+    existingSecret: ""
+    existingSecretKey: "DATABASE_URL"
+
+# ------------------------------------------------------------------------------
+# Persistent Volume Claim for Backend Data (Uploads, Reports, SQLite fallback)
+# ------------------------------------------------------------------------------
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 20Gi
+  mountPath: /app/data
+  storageClass: ""
+  # Existing claim name if pre-provisioned by cluster administrator
+  claimName: ""
+  annotations: {}
+
+# ------------------------------------------------------------------------------
+# Ingress Configuration (Zero cert-manager dependency)
+# ------------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+
+  # Performance and proxy buffer annotations (NO cert-manager annotations required)
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "500m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/client-body-buffer-size: "64m"
+
+  hosts:
+    - host: "regubom.internal"
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /docs
+          pathType: Prefix
+          service: backend
+        - path: /redoc
+          pathType: Prefix
+          service: backend
+        - path: /openapi.json
+          pathType: Prefix
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend
+
+  # Configurable TLS secrets - Bring Your Own Certificate (Air-Gap Sovereign)
+  # Pre-provision the secret: kubectl create secret tls regubom-tls-cert --cert=... --key=...
+  tls:
+    - secretName: "regubom-tls-cert"
+      hosts:
+        - "regubom.internal"
+
+# ------------------------------------------------------------------------------
+# Network Policy (Zero-Trust Defense-in-Depth)
+# ------------------------------------------------------------------------------
+networkPolicy:
+  enabled: false
+  # When enabled, limits traffic between frontend, backend, database and ingress only

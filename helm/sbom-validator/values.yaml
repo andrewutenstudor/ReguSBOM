@@ -1,0 +1,161 @@
+# Default values for sbom-validator.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Target host domain
+domain: sbom-validator.cssp.lab
+
+# Image pull secrets for private registry
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# ------------------------------------------------------------------------------
+# Backend Configuration (FastAPI + Python)
+# ------------------------------------------------------------------------------
+backend:
+  # MUST BE STRICTLY 1: SQLite does not support multi-writer concurrency
+  replicaCount: 1
+
+  image:
+    repository: gitlab.cssp.lab:5050/devsecops-support/tools/sbom-validator-backend
+    pullPolicy: IfNotPresent
+    tag: "v1.2"
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  # Application environment variables
+  env:
+    DATABASE_URL: "sqlite:////app/data/sbom_validator.db"
+    UPLOAD_DIR: "/app/data/uploads"
+    REPORT_DIR: "/app/data/reports"
+    MAX_FILE_SIZE_MB: "500"
+    ALLOWED_HOSTS: "*"
+    HOST: "0.0.0.0"
+    PORT: "8000"
+
+  # Resource requests and limits for large 34MB+ SBOM processing
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+  livenessProbe:
+    httpGet:
+      path: /api/health
+      port: 8000
+    initialDelaySeconds: 20
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /api/health
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ------------------------------------------------------------------------------
+# Frontend Configuration (React + Vite + Nginx)
+# ------------------------------------------------------------------------------
+frontend:
+  # Stateless frontend - can scale horizontally if needed
+  replicaCount: 1
+
+  image:
+    repository: gitlab.cssp.lab:5050/devsecops-support/tools/sbom-validator-frontend
+    pullPolicy: IfNotPresent
+    tag: "v1.2"
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 80
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 80
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ------------------------------------------------------------------------------
+# Persistent Volume Claim Configuration (Backend SQLite, uploads & reports)
+# ------------------------------------------------------------------------------
+persistence:
+  enabled: true
+  # Existing claim name if pre-provisioned, leave empty to create via template
+  claimName: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  mountPath: /app/data
+  # StorageClass to use. If empty string (""), cluster default is used
+  storageClass: ""
+  annotations: {}
+
+# ------------------------------------------------------------------------------
+# Ingress Configuration (Nginx Ingress + Cert-Manager for RKE2)
+# ------------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/issuer: "internal-ca"
+    nginx.ingress.kubernetes.io/proxy-body-size: "500m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/client-body-buffer-size: "64m"
+  hosts:
+    - host: sbom-validator.cssp.lab
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /docs
+          pathType: Prefix
+          service: backend
+        - path: /openapi.json
+          pathType: Exact
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls:
+    - secretName: sbom-validator-tls
+      hosts:
+        - sbom-validator.cssp.lab

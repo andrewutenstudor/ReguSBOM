@@ -1,0 +1,19 @@
+apiVersion: v2
+name: sbom-validator
+description: Production-grade Helm chart for enterprise SBOM Validator on RKE2 Kubernetes
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - sbom
+  - cyclonedx
+  - cra
+  - nis2
+  - compliance
+  - security
+home: https://sbom-validator.cssp.lab
+sources:
+  - https://github.com/company/sbom-validator
+maintainers:
+  - name: CSSP Lab Team
+    email: cssp-lab@company.internal

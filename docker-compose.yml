@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # Relational Database: PostgreSQL 16
+  db:
+    image: postgres:16-alpine
+    container_name: regubom-db
+    environment:
+      POSTGRES_USER: regubom
+      POSTGRES_PASSWORD: regubom_secret_2026
+      POSTGRES_DB: regubom
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U regubom -d regubom"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - regubom-network
+
+  # ReguBOM Regulatory Engine & API (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: regubom-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_reports:/app/reports
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://regubom:regubom_secret_2026@db:5432/regubom
+      - UPLOAD_DIR=/app/uploads
+      - REPORT_DIR=/app/reports
+      - MAX_FILE_SIZE_MB=500
+      - DEFAULT_PROPRIETARY_PREFIX=regubom:proprietary
+      - ALLOWED_HOSTS=*
+      - HOST=0.0.0.0
+      - PORT=8000
+    restart: unless-stopped
+    networks:
+      regubom-network:
+        aliases:
+          - backend
+          - regubom-backend
+          - sbom-validator-backend
+
+  # ReguBOM Frontend (React + Vite + Nginx Reverse Proxy)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: regubom-frontend
+    ports:
+      - "80:8080"
+      - "5173:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - regubom-network
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_reports:
+    driver: local
+
+networks:
+  regubom-network:
+    driver: bridge

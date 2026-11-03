@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Backend API service (FastAPI + Python)
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: sbom-validator-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_reports:/app/reports
+      - backend_db:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/sbom_validator.db
+      - UPLOAD_DIR=/app/uploads
+      - REPORT_DIR=/app/reports
+      - MAX_FILE_SIZE_MB=500
+      - ALLOWED_HOSTS=*
+      - HOST=0.0.0.0
+      - PORT=8000
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "300"]
+    restart: unless-stopped
+    networks:
+      sbom-network:
+        aliases:
+          - sbom-validator-backend
+          - backend
+
+  # Frontend service (React + Nginx)
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    container_name: sbom-validator-frontend
+    ports:
+      - "5173:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - sbom-network
+
+volumes:
+  backend_uploads:
+  backend_reports:
+  backend_db:
+
+networks:
+  sbom-network:
+    driver: bridge

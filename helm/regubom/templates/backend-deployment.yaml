@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "regubom.backend.fullname" . }}
+  labels:
+    {{- include "regubom.backend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicaCount | default 1 }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "regubom.backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "regubom.backend.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "regubom.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+        - name: backend
+          image: {{ include "regubom.image" (dict "image" .Values.backend.image "root" .) | quote }}
+          imagePullPolicy: {{ include "regubom.pullPolicy" (dict "image" .Values.backend.image "root" .) }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            {{- if .Values.postgresql.enabled }}
+            - name: DB_USER
+              value: {{ .Values.postgresql.auth.username | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "regubom.dbSecretName" . }}
+                  key: {{ .Values.postgresql.auth.existingSecretPasswordKey | default "password" }}
+            - name: DATABASE_URL
+              value: "postgresql://$(DB_USER):$(DB_PASSWORD)@{{ include "regubom.postgresql.fullname" . }}:{{ .Values.postgresql.service.port | default 5432 }}/{{ .Values.postgresql.auth.database }}"
+            {{- else if .Values.postgresql.externalDatabase.existingSecret }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.externalDatabase.existingSecret | quote }}
+                  key: {{ .Values.postgresql.externalDatabase.existingSecretKey | default "DATABASE_URL" | quote }}
+            {{- else if .Values.postgresql.externalDatabase.url }}
+            - name: DATABASE_URL
+              value: {{ .Values.postgresql.externalDatabase.url | quote }}
+            {{- else }}
+            - name: DATABASE_URL
+              value: "sqlite:////app/data/regubom.db"
+            {{- end }}
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "regubom.secretName" . }}
+                  key: JWT_SECRET_KEY
+            - name: UPLOAD_DIR
+              value: {{ .Values.backend.env.UPLOAD_DIR | quote }}
+            - name: REPORT_DIR
+              value: {{ .Values.backend.env.REPORT_DIR | quote }}
+            - name: LICENSE_PATH
+              value: {{ .Values.backend.env.LICENSE_PATH | quote }}
+            - name: MAX_FILE_SIZE_MB
+              value: {{ .Values.backend.env.MAX_FILE_SIZE_MB | quote }}
+            - name: FIRST_PARTY_PROPERTY_PREFIX
+              value: {{ .Values.backend.env.FIRST_PARTY_PROPERTY_PREFIX | quote }}
+            - name: ALLOWED_HOSTS
+              value: {{ .Values.backend.env.ALLOWED_HOSTS | quote }}
+            - name: HOST
+              value: {{ .Values.backend.env.HOST | quote }}
+            - name: PORT
+              value: {{ .Values.backend.env.PORT | quote }}
+            - name: TELEMETRY_ENABLED
+              value: {{ .Values.backend.env.TELEMETRY_ENABLED | quote }}
+            - name: AIRGAP_AUTHORIZED
+              value: {{ .Values.backend.env.AIRGAP_AUTHORIZED | quote }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          {{- with .Values.backend.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.backend.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath | default "/app/data" }}
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "regubom.backend.pvcName" . }}
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

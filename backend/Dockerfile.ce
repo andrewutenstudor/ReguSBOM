@@ -1,0 +1,39 @@
+# ReguBOM Community Edition (CE) — Dockerfile (Open Source, Apache 2.0)
+FROM python:3.12-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Non-root user with UID 10001 for OpenShift / RKE2 CIS compliance
+RUN groupadd -g 10001 regubom && useradd -u 10001 -g 10001 -d /app -s /sbin/nologin regubom
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy Community Edition code ONLY (ee/ is intentionally excluded in CE)
+COPY app /app/app
+COPY cli /app/cli
+COPY main.py /app/main.py
+
+# Create storage directories and set non-root permissions
+RUN mkdir -p uploads reports data && \
+    chown -R regubom:regubom /app && \
+    chmod -R 777 uploads reports data
+
+USER regubom
+
+ENV HOST=0.0.0.0 \
+    PORT=8000 \
+    DATABASE_URL=sqlite:///./data/regubom_ce.db
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

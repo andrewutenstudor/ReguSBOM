@@ -1,0 +1,41 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "regubom.fullname" . }}
+  labels:
+    {{- include "regubom.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName | quote }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ if eq .service "backend" }}{{ include "regubom.backend.fullname" $ }}{{ else if eq .service "frontend" }}{{ include "regubom.frontend.fullname" $ }}{{ else }}{{ .service }}{{ end }}
+                port:
+                  number: {{ if eq .service "backend" }}{{ $.Values.backend.service.port | default 8000 }}{{ else if eq .service "frontend" }}{{ $.Values.frontend.service.port | default 80 }}{{ else }}{{ .port | default 80 }}{{ end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

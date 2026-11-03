@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sbom-validator.backend.fullname" . }}
+  labels:
+    {{- include "sbom-validator.backend.labels" . | nindent 4 }}
+spec:
+  # Strictly limited to 1 replica to prevent SQLite database lock/corruption
+  replicas: 1
+  # Recreate strategy ensures old pod releases ReadWriteOnce volume before new pod mounts it
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "sbom-validator.backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sbom-validator.backend.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.backend.env.DATABASE_URL | quote }}
+            - name: UPLOAD_DIR
+              value: {{ .Values.backend.env.UPLOAD_DIR | quote }}
+            - name: REPORT_DIR
+              value: {{ .Values.backend.env.REPORT_DIR | quote }}
+            - name: MAX_FILE_SIZE_MB
+              value: {{ .Values.backend.env.MAX_FILE_SIZE_MB | quote }}
+            - name: ALLOWED_HOSTS
+              value: {{ .Values.backend.env.ALLOWED_HOSTS | quote }}
+            - name: HOST
+              value: {{ .Values.backend.env.HOST | quote }}
+            - name: PORT
+              value: {{ .Values.backend.env.PORT | quote }}
+          {{- with .Values.backend.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.backend.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.backend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "sbom-validator.pvcName" . }}
+        {{- end }}
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

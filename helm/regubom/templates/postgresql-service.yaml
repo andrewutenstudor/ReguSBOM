@@ -1,0 +1,17 @@
+{{- if .Values.postgresql.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "regubom.postgresql.fullname" . }}
+  labels:
+    {{- include "regubom.postgresql.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.postgresql.service.type | default "ClusterIP" }}
+  ports:
+    - name: postgresql
+      port: {{ .Values.postgresql.service.port | default 5432 }}
+      targetPort: postgresql
+      protocol: TCP
+  selector:
+    {{- include "regubom.postgresql.selectorLabels" . | nindent 4 }}
+{{- end }}

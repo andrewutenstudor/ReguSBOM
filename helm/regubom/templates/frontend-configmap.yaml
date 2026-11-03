@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "regubom.frontend.fullname" . }}-nginx
+  labels:
+    {{- include "regubom.frontend.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    # ReguBOM Non-Root Nginx Configuration (UID 10001 Compliant)
+    server {
+        listen {{ .Values.frontend.containerPort | default 8080 }};
+        server_name _ localhost;
+        client_max_body_size {{ .Values.backend.env.MAX_FILE_SIZE_MB | default 500 }}M;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # Gzip compression for high-performance static delivery
+        gzip on;
+        gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Healthcheck endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+        }
+
+        # Proxy API requests to backend service
+        location /api/ {
+            proxy_pass http://{{ include "regubom.backend.fullname" . }}:{{ .Values.backend.service.port | default 8000 }}/api/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_read_timeout 300s;
+        }
+
+        # Documentation and schema explorer proxies
+        location ~ ^/(docs|redoc|openapi.json) {
+            proxy_pass http://{{ include "regubom.backend.fullname" . }}:{{ .Values.backend.service.port | default 8000 }};
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
