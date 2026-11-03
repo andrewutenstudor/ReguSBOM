@@ -32,8 +32,6 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from app.core.enisa_engine import audit_enisa_compliance
-
 VERSION = "2.0.0-ce"
 
 
@@ -150,6 +148,11 @@ def main():
         help="Optional ReguBOM API endpoint URL (e.g. http://localhost:8000)",
     )
     parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Force local regulatory engine execution (requires backend dependencies)",
+    )
+    parser.add_argument(
         "--format",
         choices=["cyclonedx", "spdx"],
         default=None,
@@ -205,8 +208,8 @@ def main():
 
     imprint = compute_file_imprint(sbom_path)
 
-    # If --api-url is provided, submit to remote/local ReguBOM API gateway
-    if args.api_url:
+    # If --api-url is provided and not --local, submit to remote/local ReguBOM API gateway
+    if args.api_url and not args.local:
         target_url = args.api_url.rstrip("/") + "/api/validate"
         boundary = "----WebKitFormBoundaryReguBOM" + uuid.uuid4().hex
         parts = []
@@ -256,6 +259,16 @@ def main():
             sys.exit(1)
     else:
         # Execute local offline ENISA Oct 2026 / BSI / CRA Compliance Audit Engine
+        try:
+            from app.core.enisa_engine import audit_enisa_compliance
+        except ImportError as e:
+            print(
+                f"Error: Local regulatory engine dependencies not installed ({e}). "
+                "Use --api-url to target a running ReguBOM gateway, or install requirements: pip install -r backend/requirements.txt",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
         try:
             audit_result = audit_enisa_compliance(
                 sbom_data,
