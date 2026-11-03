@@ -8,22 +8,48 @@ fully compliant CycloneDX v1.6 JSON SBOM documents.
 import io
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Union, BinaryIO, Optional, Dict, Any, List
+from typing import Any, BinaryIO
 
 import pandas as pd
 
 # Supported SPDX licenses for clean identifier resolution
-VALID_SPDX_LICENSES = frozenset([
-    "MIT", "Apache-2.0", "GPL-2.0", "GPL-2.0-only", "GPL-2.0-or-later",
-    "GPL-3.0", "GPL-3.0-only", "GPL-3.0-or-later", "LGPL-2.0", "LGPL-2.1",
-    "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0", "LGPL-3.0-only",
-    "LGPL-3.0-or-later", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MPL-2.0",
-    "CDDL-1.0", "EPL-1.0", "EPL-2.0", "AGPL-3.0", "AGPL-3.0-only",
-    "AGPL-3.0-or-later", "CC0-1.0", "Unlicense", "EUPL-1.2", "EUPL-1.1",
-    "NOASSERTION", "NONE",
-])
+VALID_SPDX_LICENSES = frozenset(
+    [
+        "MIT",
+        "Apache-2.0",
+        "GPL-2.0",
+        "GPL-2.0-only",
+        "GPL-2.0-or-later",
+        "GPL-3.0",
+        "GPL-3.0-only",
+        "GPL-3.0-or-later",
+        "LGPL-2.0",
+        "LGPL-2.1",
+        "LGPL-2.1-only",
+        "LGPL-2.1-or-later",
+        "LGPL-3.0",
+        "LGPL-3.0-only",
+        "LGPL-3.0-or-later",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "ISC",
+        "MPL-2.0",
+        "CDDL-1.0",
+        "EPL-1.0",
+        "EPL-2.0",
+        "AGPL-3.0",
+        "AGPL-3.0-only",
+        "AGPL-3.0-or-later",
+        "CC0-1.0",
+        "Unlicense",
+        "EUPL-1.2",
+        "EUPL-1.1",
+        "NOASSERTION",
+        "NONE",
+    ]
+)
 
 
 def _clean_str(val: Any) -> str:
@@ -40,8 +66,8 @@ def _normalize_col_name(col: Any) -> str:
 
 
 def convert_excel_to_cyclonedx(
-    excel_input: Union[bytes, BinaryIO, str, Path],
-    filename: Optional[str] = None,
+    excel_input: bytes | BinaryIO | str | Path,
+    filename: str | None = None,
 ) -> str:
     """
     Parse an Excel file (expecting columns: Component Name, Version, Supplier, License)
@@ -73,7 +99,7 @@ def convert_excel_to_cyclonedx(
 
     # Map expected columns flexibly
     # Expecting: Component Name, Version, Supplier, License
-    col_map: Dict[str, str] = {}
+    col_map: dict[str, str] = {}
     for col in df.columns:
         norm = _normalize_col_name(col)
         if norm in ("component name", "component", "name"):
@@ -91,8 +117,8 @@ def convert_excel_to_cyclonedx(
             f"Found columns: {list(df.columns)}. Expected: Component Name, Version, Supplier, License."
         )
 
-    components: List[Dict[str, Any]] = []
-    component_bom_refs: List[str] = []
+    components: list[dict[str, Any]] = []
+    component_bom_refs: list[str] = []
     root_bom_ref = f"pkg:generic/{clean_filename.lower().replace(' ', '-')}@1.0.0"
 
     for idx, row in df.iterrows():
@@ -109,7 +135,7 @@ def convert_excel_to_cyclonedx(
         bom_ref = f"pkg:generic/{safe_name}@{version}"
         component_bom_refs.append(bom_ref)
 
-        comp: Dict[str, Any] = {
+        comp: dict[str, Any] = {
             "type": "library",
             "bom-ref": bom_ref,
             "name": name,
@@ -132,13 +158,13 @@ def convert_excel_to_cyclonedx(
         components.append(comp)
 
     # Build CycloneDX v1.6 document
-    cyclonedx_doc: Dict[str, Any] = {
+    cyclonedx_doc: dict[str, Any] = {
         "bomFormat": "CycloneDX",
         "specVersion": "1.6",
         "serialNumber": f"urn:uuid:{uuid.uuid4()}",
         "version": 1,
         "metadata": {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "tools": {
                 "components": [
                     {
@@ -155,9 +181,7 @@ def convert_excel_to_cyclonedx(
                 "name": clean_filename,
                 "version": "1.0.0",
                 "description": "Converted from legacy Excel inventory",
-                "supplier": {
-                    "name": "Internal Organization / Legacy Ingestion Bridge"
-                },
+                "supplier": {"name": "Internal Organization / Legacy Ingestion Bridge"},
             },
         },
         "components": components,

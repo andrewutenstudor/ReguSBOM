@@ -1,4 +1,5 @@
 """Application configuration settings for ReguBOM."""
+
 import os
 from pathlib import Path
 

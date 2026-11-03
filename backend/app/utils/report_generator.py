@@ -1,9 +1,11 @@
 """Report generation utilities for JSON, HTML, and PDF formats."""
+
 import json
 from datetime import datetime
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 try:
     import orjson
@@ -12,6 +14,7 @@ except ImportError:
 
 try:
     from weasyprint import HTML as WeasyHTML
+
     WEASYPRINT_AVAILABLE = True
 except (ImportError, OSError, Exception):
     WEASYPRINT_AVAILABLE = False
@@ -26,16 +29,16 @@ class ReportGenerator:
 
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_dir)),
-            autoescape=select_autoescape(['html', 'xml'])
+            autoescape=select_autoescape(["html", "xml"]),
         )
 
-    def prepare_executive_dossier(self, report_data: Dict[str, Any], max_table_rows: int = 50) -> Dict[str, Any]:
+    def prepare_executive_dossier(self, report_data: dict[str, Any], max_table_rows: int = 50) -> dict[str, Any]:
         """
         Hardens HTML and PDF report generation against memory crashes on 57,000+ component SBOMs.
         Computes aggregate metrics across the entire fleet of components, extracts the top 50
         critical non-compliant gaps, and caps the rendered DOM table size.
         """
-        raw_matrix: List[Dict[str, Any]] = report_data.get("component_matrix", []) or []
+        raw_matrix: list[dict[str, Any]] = report_data.get("component_matrix", []) or []
         total_components = len(raw_matrix)
 
         proprietary_count = 0
@@ -44,7 +47,7 @@ class ReportGenerator:
         missing_hash = 0
         missing_license = 0
         missing_deps = 0
-        non_compliant_gaps: List[Dict[str, Any]] = []
+        non_compliant_gaps: list[dict[str, Any]] = []
 
         for comp in raw_matrix:
             is_prop = bool(comp.get("is_core") or comp.get("is_proprietary"))

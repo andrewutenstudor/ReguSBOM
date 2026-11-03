@@ -3,19 +3,19 @@ ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
 Immutable Audit Log Query & Compliance Export Endpoints.
 Accessible by ADMIN and AUDITOR roles. Supports JSON pagination & CSV streaming export.
 """
+
 import csv
 import io
 import json
 from datetime import datetime
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.core.auth.roles import Role, require_role
+from app.core.database import get_db
 from app.models.audit import AuditLog
 
 router = APIRouter(prefix="/api/admin", tags=["audit-logging"])
@@ -24,18 +24,18 @@ router = APIRouter(prefix="/api/admin", tags=["audit-logging"])
 @router.get(
     "/audit-logs",
     summary="Query Immutable Regulatory Audit Logs (Admin & Auditor Only)",
-    dependencies=[Depends(require_role([Role.ADMIN, Role.AUDITOR]))]
+    dependencies=[Depends(require_role([Role.ADMIN, Role.AUDITOR]))],
 )
 async def get_audit_logs(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=500, description="Records per page"),
-    action: Optional[str] = Query(None, description="Filter by action name (e.g. UPLOAD_SBOM_TIER)"),
-    resource_type: Optional[str] = Query(None, description="Filter by resource type (e.g. ARTIFACT, PRODUCT)"),
-    user_id: Optional[str] = Query(None, description="Filter by operator username"),
-    from_date: Optional[str] = Query(None, description="ISO from timestamp (e.g. 2026-01-01)"),
-    to_date: Optional[str] = Query(None, description="ISO to timestamp (e.g. 2026-12-31)"),
+    action: str | None = Query(None, description="Filter by action name (e.g. UPLOAD_SBOM_TIER)"),
+    resource_type: str | None = Query(None, description="Filter by resource type (e.g. ARTIFACT, PRODUCT)"),
+    user_id: str | None = Query(None, description="Filter by operator username"),
+    from_date: str | None = Query(None, description="ISO from timestamp (e.g. 2026-01-01)"),
+    to_date: str | None = Query(None, description="ISO to timestamp (e.g. 2026-12-31)"),
     format: str = Query("json", regex="^(json|csv)$", description="Export format: json or csv"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Retrieves regulatory audit records with pagination, filtering, and CSV export.
@@ -74,35 +74,39 @@ async def get_audit_logs(
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "Audit ID",
-            "Timestamp (UTC)",
-            "User ID",
-            "Action",
-            "Resource Type",
-            "Resource ID",
-            "Client IP",
-            "HTTP Method",
-            "HTTP Status",
-            "Duration (ms)",
-            "Details"
-        ])
+        writer.writerow(
+            [
+                "Audit ID",
+                "Timestamp (UTC)",
+                "User ID",
+                "Action",
+                "Resource Type",
+                "Resource ID",
+                "Client IP",
+                "HTTP Method",
+                "HTTP Status",
+                "Duration (ms)",
+                "Details",
+            ]
+        )
 
         for log in records:
             details = log.details or {}
-            writer.writerow([
-                log.id,
-                log.timestamp.isoformat() if log.timestamp else "",
-                log.user_id or "anonymous",
-                log.action,
-                log.resource_type,
-                log.resource_id or "",
-                log.ip_address or "",
-                details.get("method", ""),
-                details.get("status_code", ""),
-                details.get("duration_ms", ""),
-                json.dumps(details)
-            ])
+            writer.writerow(
+                [
+                    log.id,
+                    log.timestamp.isoformat() if log.timestamp else "",
+                    log.user_id or "anonymous",
+                    log.action,
+                    log.resource_type,
+                    log.resource_id or "",
+                    log.ip_address or "",
+                    details.get("method", ""),
+                    details.get("status_code", ""),
+                    details.get("duration_ms", ""),
+                    json.dumps(details),
+                ]
+            )
 
         output.seek(0)
         filename = f"regubom_audit_trail_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -112,7 +116,7 @@ async def get_audit_logs(
             headers={
                 "Content-Disposition": f"attachment; filename={filename}",
                 "Cache-Control": "no-cache",
-            }
+            },
         )
 
     # JSON Paginated Response
@@ -125,5 +129,5 @@ async def get_audit_logs(
         "page": page,
         "limit": limit,
         "pages": max(1, (total + limit - 1) // limit),
-        "audit_logs": [log.to_dict() for log in logs]
+        "audit_logs": [log.to_dict() for log in logs],
     }

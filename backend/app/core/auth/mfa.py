@@ -4,15 +4,14 @@ Multi-Factor Authentication (MFA) Engine.
 Implements RFC 6238 TOTP (Microsoft Authenticator / Google Authenticator)
 and cryptographically secure one-time emergency recovery codes.
 """
+
 import base64
-import io
 import hashlib
+import io
 import secrets
-from typing import Tuple, List, Optional
+
 import pyotp
 import qrcode
-from qrcode.image.pil import PilImage
-
 
 ISSUER_NAME = "ReguBOM"
 
@@ -68,7 +67,7 @@ def hash_recovery_code(code: str) -> str:
     return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
 
 
-def generate_recovery_codes(count: int = 8) -> Tuple[List[str], List[str]]:
+def generate_recovery_codes(count: int = 8) -> tuple[list[str], list[str]]:
     """
     Generates emergency one-time recovery codes (e.g. 'A1B2-C3D4').
     Returns (plain_codes, hashed_codes).
@@ -85,10 +84,7 @@ def generate_recovery_codes(count: int = 8) -> Tuple[List[str], List[str]]:
     return plain_codes, hashed_codes
 
 
-def verify_and_consume_recovery_code(
-    code: str,
-    stored_hashed_codes: Optional[List[str]]
-) -> Tuple[bool, List[str]]:
+def verify_and_consume_recovery_code(code: str, stored_hashed_codes: list[str] | None) -> tuple[bool, list[str]]:
     """
     Verifies if a code matches an emergency recovery code.
     If valid, consumes (removes) that code from the list and returns (True, updated_list).

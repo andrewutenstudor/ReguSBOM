@@ -2,29 +2,38 @@
 ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
 API Routes for ENISA Technical Advisory (October 2026) & EU CRA Compliance Auditing.
 """
+
+import asyncio
+import hashlib
 import json
+import logging
 import os
 import uuid
-import asyncio
-import logging
-import hashlib
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
 
 try:
     import orjson
 except ImportError:
     orjson = None
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Query, Response
-from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
+from app.core.auth_hook import require_role
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.enisa_engine import audit_enisa_compliance
-from app.core.auth_hook import require_role
 from app.models.sbom import SBOMRecord, ValidationReport
 from app.utils.report_generator import ReportGenerator
 
@@ -77,15 +86,15 @@ def _write_file_bytes(file_path: Path, data: bytes) -> None:
         "Audits Table 1 document metadata, generates the 12-point ENISA/BSI regulatory checklist, "
         "and computes the 8-column Component Completeness Matrix with bifurcated 1st vs 3rd party logic."
     ),
-    dependencies=[Depends(require_role(["admin", "operator"]))]
+    dependencies=[Depends(require_role(["admin", "operator"]))],
 )
 async def validate_sbom(
     file: UploadFile = File(...),
     max_size: int = Form(500),
-    profile: Optional[str] = Form("ENISA_2026"),
-    proprietary_prefix: Optional[str] = Form(None),
-    proprietary_supplier: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    profile: str | None = Form("ENISA_2026"),
+    proprietary_prefix: str | None = Form(None),
+    proprietary_supplier: str | None = Form(None),
+    db: Session = Depends(get_db),
 ):
     raw_filename = file.filename or "unknown"
     safe_filename = Path(raw_filename).name  # Defend against path traversal
@@ -105,7 +114,7 @@ async def validate_sbom(
         logger.warning(f"[Validate] File exceeds maximum size: {file_size} > {max_bytes}")
         raise HTTPException(
             status_code=413,
-            detail=f"Uploaded file exceeds limit ({file_size} bytes > {max_bytes} bytes allowed)"
+            detail=f"Uploaded file exceeds limit ({file_size} bytes > {max_bytes} bytes allowed)",
         )
 
     # Magic byte signature pre-check (block PK zip archives and OLE headers)
@@ -136,15 +145,15 @@ async def validate_sbom(
     eff_supplier = proprietary_supplier or settings.DEFAULT_PROPRIETARY_SUPPLIER
 
     # Run ENISA Technical Advisory Compliance Engine in worker thread
-    start_time = datetime.now(timezone.utc)
+    start_time = datetime.now(UTC)
     enisa_result = await asyncio.to_thread(
         audit_enisa_compliance,
         sbom_data,
         file_imprint=file_imprint,
         proprietary_prefix=eff_prefix,
-        proprietary_supplier=eff_supplier
+        proprietary_supplier=eff_supplier,
     )
-    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+    elapsed = (datetime.now(UTC) - start_time).total_seconds()
 
     format_info = enisa_result["format_info"]
     sbom_format = format_info["format"]
@@ -158,7 +167,7 @@ async def validate_sbom(
         file_path=str(file_path),
         sbom_format=sbom_format,
         schema_version=schema_version,
-        sbom_data=sbom_data
+        sbom_data=sbom_data,
     )
     db.add(sbom_record)
     db.commit()
@@ -209,7 +218,7 @@ async def validate_sbom(
         overall_status=enisa_result["overall_status"],
         overall_valid=enisa_result["overall_valid"],
         processing_time=elapsed,
-        report_data=report_data
+        report_data=report_data,
     )
     db.add(report_record)
     db.commit()
@@ -238,11 +247,15 @@ async def validate_sbom(
             "html": f"/api/reports/{report_record.id}/download/html",
             "pdf": f"/api/reports/{report_record.id}/download/pdf",
             "certificate": f"/api/reports/{report_record.id}/certificate",
-        }
+        },
     }
 
 
-@router.get("/reports/{report_id}/certificate", summary="Download JSON Compliance Certificate", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/reports/{report_id}/certificate",
+    summary="Download JSON Compliance Certificate",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def get_compliance_certificate(report_id: int, db: Session = Depends(get_db)):
     """Downloads Standalone JSON Compliance Certificate conforming to CRA Art. 13 & ENISA Advisory 2026."""
     report = db.query(ValidationReport).filter(ValidationReport.id == report_id).first()
@@ -254,21 +267,25 @@ async def get_compliance_certificate(report_id: int, db: Session = Depends(get_d
         return FileResponse(
             path=str(cert_path),
             filename=f"regubom_compliance_certificate_{report_id}.json",
-            media_type="application/json"
+            media_type="application/json",
         )
 
     cert_data = report.report_data.get("certificate_data") or report.report_data
     return JSONResponse(
         content=cert_data,
-        headers={"Content-Disposition": f"attachment; filename=regubom_compliance_certificate_{report_id}.json"}
+        headers={"Content-Disposition": f"attachment; filename=regubom_compliance_certificate_{report_id}.json"},
     )
 
 
-@router.get("/reports", summary="List historical validation reports", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/reports",
+    summary="List historical validation reports",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def list_reports(
     limit: int = Query(50),
-    status: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    status: str | None = Query(None),
+    db: Session = Depends(get_db),
 ):
     query = db.query(ValidationReport).order_by(ValidationReport.validation_timestamp.desc())
     if status:
@@ -298,7 +315,11 @@ async def list_reports(
     }
 
 
-@router.get("/reports/{report_id}", summary="Get validation report details", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/reports/{report_id}",
+    summary="Get validation report details",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def get_report(report_id: int, db: Session = Depends(get_db)):
     report = db.query(ValidationReport).filter(ValidationReport.id == report_id).first()
     if not report:
@@ -307,7 +328,11 @@ async def get_report(report_id: int, db: Session = Depends(get_db)):
     report_dict = dict(report.report_data or {})
 
     # Ensure ENISA checklist and matrix are refreshed if legacy format is stored
-    if "cra_checklist" not in report_dict or not report_dict.get("cra_checklist") or len(report_dict.get("cra_checklist", [])) < 12:
+    if (
+        "cra_checklist" not in report_dict
+        or not report_dict.get("cra_checklist")
+        or len(report_dict.get("cra_checklist", [])) < 12
+    ):
         if sbom and sbom.sbom_data:
             enisa_res = audit_enisa_compliance(sbom.sbom_data, file_imprint=report_dict.get("file_imprint"))
             report_dict["cra_checklist"] = enisa_res["cra_checklist"]
@@ -336,7 +361,11 @@ async def get_report(report_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/reports/{report_id}/download/{fmt}", summary="Download report in specified format", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/reports/{report_id}/download/{fmt}",
+    summary="Download report in specified format",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def download_report(report_id: int, fmt: str, db: Session = Depends(get_db)):
     report = db.query(ValidationReport).filter(ValidationReport.id == report_id).first()
     if not report:
@@ -351,7 +380,7 @@ async def download_report(report_id: int, fmt: str, db: Session = Depends(get_db
             return FileResponse(
                 path=str(file_path),
                 filename=f"regubom_report_{report_id}.json",
-                media_type="application/json"
+                media_type="application/json",
             )
         report_gen = ReportGenerator()
         return JSONResponse(content=report_gen.generate_json(report.report_data))
@@ -362,7 +391,7 @@ async def download_report(report_id: int, fmt: str, db: Session = Depends(get_db
             return FileResponse(
                 path=str(file_path),
                 filename=f"regubom_technical_dossier_{report_id}.html",
-                media_type="text/html"
+                media_type="text/html",
             )
         report_gen = ReportGenerator()
         return HTMLResponse(content=report_gen.generate_html(report.report_data))
@@ -373,7 +402,7 @@ async def download_report(report_id: int, fmt: str, db: Session = Depends(get_db
             return FileResponse(
                 path=str(file_path),
                 filename=f"regubom_technical_dossier_{report_id}.pdf",
-                media_type="application/pdf"
+                media_type="application/pdf",
             )
         report_gen = ReportGenerator()
         try:
@@ -384,10 +413,17 @@ async def download_report(report_id: int, fmt: str, db: Session = Depends(get_db
             html_content = report_gen.generate_html(report.report_data)
             return HTMLResponse(content=html_content)
 
-    raise HTTPException(status_code=400, detail="Invalid format. Supported: json, html, pdf, certificate")
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid format. Supported: json, html, pdf, certificate",
+    )
 
 
-@router.get("/sboms/{sbom_id}/viewer", summary="Interactive SBOM Component & Gap Analysis", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/sboms/{sbom_id}/viewer",
+    summary="Interactive SBOM Component & Gap Analysis",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def get_sbom_viewer(sbom_id: int, db: Session = Depends(get_db)):
     sbom = db.query(SBOMRecord).filter(SBOMRecord.id == sbom_id).first()
     if not sbom:
@@ -399,7 +435,11 @@ async def get_sbom_viewer(sbom_id: int, db: Session = Depends(get_db)):
         if file_path.exists():
             try:
                 raw_bytes = await asyncio.to_thread(file_path.read_bytes)
-                sbom_dict = await asyncio.to_thread(orjson.loads, raw_bytes) if orjson else json.loads(raw_bytes.decode("utf-8", errors="replace"))
+                sbom_dict = (
+                    await asyncio.to_thread(orjson.loads, raw_bytes)
+                    if orjson
+                    else json.loads(raw_bytes.decode("utf-8", errors="replace"))
+                )
             except Exception as e:
                 logger.error(f"[Viewer] Failed reading SBOM file {file_path}: {e}")
                 raise HTTPException(status_code=500, detail=f"Failed reading SBOM file: {e}")
@@ -426,7 +466,11 @@ async def get_sbom_viewer(sbom_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/reports/{report_id}/viewer", summary="Viewer alias by report ID", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/reports/{report_id}/viewer",
+    summary="Viewer alias by report ID",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def get_report_viewer(report_id: int, db: Session = Depends(get_db)):
     report = db.query(ValidationReport).filter(ValidationReport.id == report_id).first()
     if not report:
@@ -434,7 +478,11 @@ async def get_report_viewer(report_id: int, db: Session = Depends(get_db)):
     return await get_sbom_viewer(report.sbom_id, db=db)
 
 
-@router.get("/sboms/{sbom_id}", summary="Get raw original SBOM content", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/sboms/{sbom_id}",
+    summary="Get raw original SBOM content",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def get_sbom(sbom_id: int, db: Session = Depends(get_db)):
     sbom = db.query(SBOMRecord).filter(SBOMRecord.id == sbom_id).first()
     if not sbom:
@@ -450,13 +498,21 @@ async def get_sbom(sbom_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/sboms", summary="List all uploaded SBOM files", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/sboms",
+    summary="List all uploaded SBOM files",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def list_sboms(limit: int = Query(50), db: Session = Depends(get_db)):
     sboms = db.query(SBOMRecord).order_by(SBOMRecord.upload_timestamp.desc()).limit(limit).all()
     return {"sboms": [s.to_dict() for s in sboms]}
 
 
-@router.delete("/reports/{report_id}", summary="Delete report and associated SBOM", dependencies=[Depends(require_role(["admin", "operator"]))])
+@router.delete(
+    "/reports/{report_id}",
+    summary="Delete report and associated SBOM",
+    dependencies=[Depends(require_role(["admin", "operator"]))],
+)
 async def delete_report(report_id: int, db: Session = Depends(get_db)):
     report = db.query(ValidationReport).filter(ValidationReport.id == report_id).first()
     if not report:
@@ -483,7 +539,11 @@ async def delete_report(report_id: int, db: Session = Depends(get_db)):
     return {"message": "Report and SBOM successfully deleted."}
 
 
-@router.get("/stats", summary="Aggregate dashboard metrics", dependencies=[Depends(require_role(["auditor"]))])
+@router.get(
+    "/stats",
+    summary="Aggregate dashboard metrics",
+    dependencies=[Depends(require_role(["auditor"]))],
+)
 async def get_stats(db: Session = Depends(get_db)):
     total = db.query(ValidationReport).count()
     passed = db.query(ValidationReport).filter(ValidationReport.overall_valid == True).count()
@@ -507,5 +567,5 @@ async def health_check():
         "status": "healthy",
         "service": settings.APP_NAME,
         "version": settings.VERSION,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(UTC).isoformat(),
     }

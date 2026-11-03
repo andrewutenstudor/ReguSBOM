@@ -3,8 +3,11 @@ ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
 SQLAlchemy AuditLog Model for Immutable Regulatory Audit Trails.
 Compliant with EU Cyber Resilience Act (CRA Art. 13 & Annex II) accountability requirements.
 """
+
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, JSON, Index
+
+from sqlalchemy import JSON, Column, DateTime, Integer, String
+
 from app.core.database import Base
 
 
@@ -13,6 +16,7 @@ class AuditLog(Base):
     Immutable audit log entry recording all mutating transactions and access events.
     Fields: id, timestamp (UTC), user_id, action, resource_type, resource_id, ip_address, details (JSON).
     """
+
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)

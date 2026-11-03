@@ -8,16 +8,16 @@ Compliant with:
 - BSI TR-03183-2 v2.1.0
 - CISA 2026 Minimum Elements
 """
+
 import argparse
 import hashlib
 import json
-import os
 import sys
-import uuid
-import urllib.request
 import urllib.error
+import urllib.request
+import uuid
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 # Ensure backend root is on PYTHONPATH
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -37,7 +37,7 @@ from app.core.enisa_engine import audit_enisa_compliance
 VERSION = "2.0.0-ce"
 
 
-def compute_file_imprint(filepath: Path) -> Dict[str, Any]:
+def compute_file_imprint(filepath: Path) -> dict[str, Any]:
     """Calculates cryptographic hashes and file metrics."""
     sha256 = hashlib.sha256()
     sha512 = hashlib.sha512()
@@ -62,13 +62,13 @@ def format_status(status_str: str) -> str:
     if not sys.stdout.isatty():
         return f"[{status_str}]"
     if status_str == "PASS":
-        return f"\033[92m[PASS]\033[0m"
+        return "\033[92m[PASS]\033[0m"
     elif status_str == "WARNING":
-        return f"\033[93m[WARN]\033[0m"
-    return f"\033[91m[FAIL]\033[0m"
+        return "\033[93m[WARN]\033[0m"
+    return "\033[91m[FAIL]\033[0m"
 
 
-def print_cli_report(result: Dict[str, Any], imprint: Dict[str, Any], filename: str):
+def print_cli_report(result: dict[str, Any], imprint: dict[str, Any], filename: str):
     """Outputs an executive terminal compliance audit dossier."""
     overall = result.get("overall_status", "UNKNOWN")
     format_info = result.get("format_info", {})
@@ -78,7 +78,7 @@ def print_cli_report(result: Dict[str, Any], imprint: Dict[str, Any], filename: 
 
     print("\n" + "=" * 78)
     print(f"  ReguBOM Community Edition CLI Scanner v{VERSION} (Apache 2.0)")
-    print(f"  EU CRA Art. 13 & ENISA Oct 2026 Regulatory Verification")
+    print("  EU CRA Art. 13 & ENISA Oct 2026 Regulatory Verification")
     print("=" * 78)
 
     print(f"\n📂 TARGET SBOM: {filename}")
@@ -144,14 +144,49 @@ def main():
         description="ReguBOM Community Edition — Standalone Headless Regulatory SBOM Scanner (Apache 2.0)",
     )
     parser.add_argument("file", help="Path to SBOM file (CycloneDX JSON or SPDX JSON)")
-    parser.add_argument("--api-url", default=None, help="Optional ReguBOM API endpoint URL (e.g. http://localhost:8000)")
-    parser.add_argument("--format", choices=["cyclonedx", "spdx"], default=None, help="SBOM format (auto-detected if omitted)")
-    parser.add_argument("--profile", default="ENISA_2026", help="Regulatory audit profile (default: ENISA_2026)")
-    parser.add_argument("--proprietary-prefix", default=None, help="Prefix for proprietary component detection (e.g. regubom:proprietary)")
-    parser.add_argument("--proprietary-supplier", default=None, help="Default supplier name for 1st-party components")
-    parser.add_argument("-o", "--output", default="text", help="Output format: 'text', 'json', or path to output file (e.g. report.json)")
-    parser.add_argument("--fail-on-warnings", action="store_true", help="Exit with code 2 if status is WARNING")
-    parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode: suppress banner, print minimal status")
+    parser.add_argument(
+        "--api-url",
+        default=None,
+        help="Optional ReguBOM API endpoint URL (e.g. http://localhost:8000)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["cyclonedx", "spdx"],
+        default=None,
+        help="SBOM format (auto-detected if omitted)",
+    )
+    parser.add_argument(
+        "--profile",
+        default="ENISA_2026",
+        help="Regulatory audit profile (default: ENISA_2026)",
+    )
+    parser.add_argument(
+        "--proprietary-prefix",
+        default=None,
+        help="Prefix for proprietary component detection (e.g. regubom:proprietary)",
+    )
+    parser.add_argument(
+        "--proprietary-supplier",
+        default=None,
+        help="Default supplier name for 1st-party components",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="text",
+        help="Output format: 'text', 'json', or path to output file (e.g. report.json)",
+    )
+    parser.add_argument(
+        "--fail-on-warnings",
+        action="store_true",
+        help="Exit with code 2 if status is WARNING",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Quiet mode: suppress banner, print minimal status",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
 
     args = parser.parse_args(raw_args)
@@ -175,7 +210,7 @@ def main():
         target_url = args.api_url.rstrip("/") + "/api/validate"
         boundary = "----WebKitFormBoundaryReguBOM" + uuid.uuid4().hex
         parts = []
-        
+
         # File field
         parts.append(f"--{boundary}".encode())
         parts.append(f'Content-Disposition: form-data; name="file"; filename="{sbom_path.name}"'.encode())

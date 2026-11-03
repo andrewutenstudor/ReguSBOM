@@ -3,18 +3,20 @@ ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
 SQLAlchemy Models for Product & Release Asset Catalog.
 Hierarchical mapping: Product -> ProductRelease -> SBOMArtifact (OS, CONTAINER, APPLICATION, FIRMWARE).
 """
+
 from datetime import datetime
+
 from sqlalchemy import (
     Column,
+    DateTime,
+    ForeignKey,
     Integer,
     String,
     Text,
-    DateTime,
-    ForeignKey,
-    Index,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -23,6 +25,7 @@ class Product(Base):
     Represents a commercial software product, appliance, or system.
     Root entity of the Regulatory Asset Catalog.
     """
+
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -37,7 +40,7 @@ class Product(Base):
         "ProductRelease",
         back_populates="product",
         cascade="all, delete-orphan",
-        order_by="desc(ProductRelease.created_at)"
+        order_by="desc(ProductRelease.created_at)",
     )
 
     def to_dict(self, include_releases: bool = False):
@@ -81,6 +84,7 @@ class ProductRelease(Base):
     Represents a specific versioned release of a product (e.g. 'v2.1.0').
     Tracks lifecycle status: DRAFT -> VALIDATED -> RELEASED -> EOL.
     """
+
     __tablename__ = "product_releases"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -88,15 +92,12 @@ class ProductRelease(Base):
         Integer,
         ForeignKey("products.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     version = Column(String(100), nullable=False, index=True)
     release_date = Column(DateTime, nullable=True)
     lifecycle_status = Column(
-        String(50),
-        nullable=False,
-        default="DRAFT",
-        index=True
+        String(50), nullable=False, default="DRAFT", index=True
     )  # DRAFT, VALIDATED, RELEASED, EOL
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -106,12 +107,10 @@ class ProductRelease(Base):
         "SBOMArtifact",
         back_populates="release",
         cascade="all, delete-orphan",
-        order_by="desc(SBOMArtifact.created_at)"
+        order_by="desc(SBOMArtifact.created_at)",
     )
 
-    __table_args__ = (
-        UniqueConstraint("product_id", "version", name="uq_product_release_version"),
-    )
+    __table_args__ = (UniqueConstraint("product_id", "version", name="uq_product_release_version"),)
 
     def to_dict(self, include_artifacts: bool = True):
         artifacts_list = self.artifacts or []
@@ -150,6 +149,7 @@ class SBOMArtifact(Base):
     Represents an audited SBOM file linked to a specific system tier
     (OS, CONTAINER, APPLICATION, FIRMWARE) within a ProductRelease.
     """
+
     __tablename__ = "sbom_artifacts"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -157,14 +157,9 @@ class SBOMArtifact(Base):
         Integer,
         ForeignKey("product_releases.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
-    tier = Column(
-        String(50),
-        nullable=False,
-        default="APPLICATION",
-        index=True
-    )  # OS, CONTAINER, APPLICATION, FIRMWARE
+    tier = Column(String(50), nullable=False, default="APPLICATION", index=True)  # OS, CONTAINER, APPLICATION, FIRMWARE
     format = Column(String(50), nullable=False)  # cyclonedx, spdx
     spec_version = Column(String(50), nullable=True)  # 1.6, 1.7, 2.3, etc.
     file_path = Column(String(512), nullable=False)
@@ -175,13 +170,13 @@ class SBOMArtifact(Base):
         Integer,
         ForeignKey("validation_reports.id", ondelete="SET NULL"),
         nullable=True,
-        index=True
+        index=True,
     )
     sbom_record_id = Column(
         Integer,
         ForeignKey("sbom_records.id", ondelete="SET NULL"),
         nullable=True,
-        index=True
+        index=True,
     )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

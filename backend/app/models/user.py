@@ -5,10 +5,12 @@ MFA / TOTP support, Scoped Machine Tokens, and Self-Service Password Resets.
 Compliant with ENISA Table 7 and NIS2 Art. 21 Access Control.
 Roles: 'admin', 'operator', 'auditor'.
 """
+
 from datetime import datetime
-from typing import List, Optional
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -38,6 +40,7 @@ class Role:
 
 class User(Base):
     """Represents a local, LDAP, or OIDC-authenticated user in ReguBOM."""
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -84,6 +87,7 @@ class ApiKey(Base):
     Machine token model for CI/CD pipeline integration and automated SBOM ingestion.
     Supports least-privilege scoping: `allowed_products` specifies product slugs or ['*'].
     """
+
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, index=True)

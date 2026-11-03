@@ -9,43 +9,43 @@ Features:
 5. In-Memory Rate Limiting and Immutable Audit Logging.
 Compliant with ENISA Table 7 and NIS2 Art. 21 Access Control Requirements.
 """
+
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
-from pydantic import BaseModel, Field, EmailStr
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.core.auth import (
     Role,
-    require_role,
     create_access_token,
     decode_access_token,
-    verify_password,
-    get_password_hash,
-    get_current_user,
-    get_current_active_user,
     generate_api_key,
+    get_current_user,
+    get_password_hash,
+    require_role,
+    verify_password,
 )
 from app.core.auth.ldap import authenticate_ldap, is_ldap_enabled
-from app.core.auth.oidc import (
-    is_oidc_enabled,
-    get_authorization_url,
-    exchange_code_for_user_info,
-)
 from app.core.auth.mfa import (
+    generate_qr_code_base64,
+    generate_recovery_codes,
     generate_totp_secret,
     generate_totp_uri,
-    generate_qr_code_base64,
-    verify_totp_code,
-    generate_recovery_codes,
     verify_and_consume_recovery_code,
+    verify_totp_code,
 )
+from app.core.auth.oidc import (
+    exchange_code_for_user_info,
+    get_authorization_url,
+    is_oidc_enabled,
+)
+from app.core.database import get_db
 from app.core.mail import send_password_reset_email
 from app.core.security import enforce_rate_limit, record_audit_event
-from app.models.user import User, ApiKey
+from app.models.user import ApiKey, User
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
@@ -64,7 +64,12 @@ class MfaVerifyRequest(BaseModel):
 
 
 class MfaEnableRequest(BaseModel):
-    code: str = Field(..., min_length=6, max_length=10, description="Verification code from authenticator app")
+    code: str = Field(
+        ...,
+        min_length=6,
+        max_length=10,
+        description="Verification code from authenticator app",
+    )
 
 
 class MfaDisableRequest(BaseModel):
@@ -83,29 +88,31 @@ class ResetPasswordRequest(BaseModel):
 
 class UserCreateRequest(BaseModel):
     username: str = Field(..., min_length=2, max_length=100)
-    email: Optional[str] = None
+    email: str | None = None
     password: str = Field(..., min_length=8)
     role: str = Field("operator", description="'admin', 'operator', or 'auditor'")
-    full_name: Optional[str] = None
+    full_name: str | None = None
 
 
 class ApiKeyCreateRequest(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100, description="Pipeline identifier (e.g. 'GitLab CI Prod')")
+    name: str = Field(
+        ...,
+        min_length=2,
+        max_length=100,
+        description="Pipeline identifier (e.g. 'GitLab CI Prod')",
+    )
     role: str = Field("operator", description="'admin', 'operator', or 'auditor'")
-    expires_in_days: Optional[int] = Field(None, description="Expiration in days (or null for non-expiring)")
-    allowed_products: Optional[List[str]] = Field(
+    expires_in_days: int | None = Field(None, description="Expiration in days (or null for non-expiring)")
+    allowed_products: list[str] | None = Field(
         default=["*"],
-        description="Allowed product slugs (e.g. ['core-gateway', 'edge-os']) or ['*'] for all"
+        description="Allowed product slugs (e.g. ['core-gateway', 'edge-os']) or ['*'] for all",
     )
 
 
 # ------------------------------------------------------------------------------
 # Auth Providers Discovery
 # ------------------------------------------------------------------------------
-@router.get(
-    "/providers",
-    summary="Discover active authentication identity providers"
-)
+@router.get("/providers", summary="Discover active authentication identity providers")
 async def get_auth_providers():
     """Returns status of enterprise identity providers (LDAP, OIDC, MFA)."""
     return {
@@ -120,13 +127,13 @@ async def get_auth_providers():
 # ------------------------------------------------------------------------------
 @router.post(
     "/login",
-    summary="Authenticate via Local Database or Corporate LDAP / Active Directory"
+    summary="Authenticate via Local Database or Corporate LDAP / Active Directory",
 )
 async def login(
     payload: LoginRequest,
     request: Request,
     response: Response,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Authenticates operator credentials against Local DB first, falling back to LDAP.
@@ -139,7 +146,7 @@ async def login(
     password = payload.password
     client_ip = request.client.host if request.client else "unknown"
 
-    user_info: Optional[User] = None
+    user_info: User | None = None
 
     # 1. Check Local DB users first (preserves break-glass admin access)
     local_user = db.query(User).filter(User.username == username).first()
@@ -185,7 +192,7 @@ async def login(
             action="LOGIN_FAILED",
             user_id=username,
             ip_address=client_ip,
-            details={"reason": "Invalid credentials", "username": username}
+            details={"reason": "Invalid credentials", "username": username},
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -196,8 +203,12 @@ async def login(
     # 4. MFA Challenge Check
     if user_info.mfa_enabled:
         mfa_token = create_access_token(
-            data={"sub": user_info.username, "user_id": user_info.id, "type": "mfa_pending"},
-            expires_delta=timedelta(minutes=5)
+            data={
+                "sub": user_info.username,
+                "user_id": user_info.id,
+                "type": "mfa_pending",
+            },
+            expires_delta=timedelta(minutes=5),
         )
         return {
             "mfa_required": True,
@@ -211,7 +222,7 @@ async def login(
         action="LOGIN_SUCCESS",
         user_id=str(user_info.id),
         ip_address=client_ip,
-        details={"username": user_info.username, "role": user_info.role}
+        details={"username": user_info.username, "role": user_info.role},
     )
 
     normalized_role = Role.normalize(user_info.role)
@@ -247,15 +258,12 @@ async def login(
 # ------------------------------------------------------------------------------
 # Multi-Factor Authentication (MFA / TOTP) Endpoints
 # ------------------------------------------------------------------------------
-@router.post(
-    "/mfa/verify",
-    summary="Verify TOTP challenge during login"
-)
+@router.post("/mfa/verify", summary="Verify TOTP challenge during login")
 async def verify_mfa_challenge(
     payload: MfaVerifyRequest,
     request: Request,
     response: Response,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Exchanges short-lived MFA challenge token and TOTP code (or recovery code)
@@ -271,7 +279,10 @@ async def verify_mfa_challenge(
     username = claims.get("sub")
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active or not user.mfa_enabled or not user.mfa_secret:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA verification unavailable.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="MFA verification unavailable.",
+        )
 
     client_ip = request.client.host if request.client else "unknown"
     code = payload.totp_code.strip()
@@ -294,7 +305,7 @@ async def verify_mfa_challenge(
             action="MFA_CHALLENGE_FAILED",
             user_id=str(user.id),
             ip_address=client_ip,
-            details={"username": user.username}
+            details={"username": user.username},
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -306,7 +317,7 @@ async def verify_mfa_challenge(
         action="MFA_VERIFY_SUCCESS",
         user_id=str(user.id),
         ip_address=client_ip,
-        details={"username": user.username, "used_recovery_code": used_recovery}
+        details={"username": user.username, "used_recovery_code": used_recovery},
     )
 
     normalized_role = Role.normalize(user.role)
@@ -339,14 +350,8 @@ async def verify_mfa_challenge(
     }
 
 
-@router.post(
-    "/mfa/setup",
-    summary="Initiate MFA setup and generate QR code"
-)
-async def setup_mfa(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+@router.post("/mfa/setup", summary="Initiate MFA setup and generate QR code")
+async def setup_mfa(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Generates standard base32 TOTP secret and returns otpauth URI + base64 QR code.
     Saves temporary candidate secret to user until verified via /mfa/enable.
@@ -366,14 +371,11 @@ async def setup_mfa(
     }
 
 
-@router.post(
-    "/mfa/enable",
-    summary="Confirm and activate MFA"
-)
+@router.post("/mfa/enable", summary="Confirm and activate MFA")
 async def enable_mfa(
     payload: MfaEnableRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Verifies code against candidate secret, activates MFA, and generates
@@ -400,7 +402,7 @@ async def enable_mfa(
         db=db,
         action="MFA_ENABLED",
         user_id=str(current_user.id),
-        details={"username": current_user.username}
+        details={"username": current_user.username},
     )
 
     return {
@@ -410,18 +412,18 @@ async def enable_mfa(
     }
 
 
-@router.post(
-    "/mfa/disable",
-    summary="Deactivate MFA"
-)
+@router.post("/mfa/disable", summary="Deactivate MFA")
 async def disable_mfa(
     payload: MfaDisableRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Deactivates MFA after validating account password and code."""
     if not current_user.hashed_password or not verify_password(payload.password, current_user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password confirmation.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid password confirmation.",
+        )
 
     code_valid = False
     if current_user.mfa_secret:
@@ -430,7 +432,10 @@ async def disable_mfa(
         code_valid, _ = verify_and_consume_recovery_code(payload.totp_code, current_user.mfa_recovery_codes)
 
     if not code_valid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid TOTP or recovery code.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid TOTP or recovery code.",
+        )
 
     current_user.mfa_enabled = False
     current_user.mfa_secret = None
@@ -441,19 +446,19 @@ async def disable_mfa(
         db=db,
         action="MFA_DISABLED",
         user_id=str(current_user.id),
-        details={"username": current_user.username}
+        details={"username": current_user.username},
     )
 
-    return {"enabled": False, "message": "Multi-Factor Authentication has been disabled."}
+    return {
+        "enabled": False,
+        "message": "Multi-Factor Authentication has been disabled.",
+    }
 
 
 # ------------------------------------------------------------------------------
 # Keycloak / OpenID Connect (OIDC) SSO Endpoints
 # ------------------------------------------------------------------------------
-@router.get(
-    "/oidc/login",
-    summary="Initiate Keycloak / OIDC Single Sign-On"
-)
+@router.get("/oidc/login", summary="Initiate Keycloak / OIDC Single Sign-On")
 async def oidc_login():
     """Generates corporate SSO authorization redirect URL."""
     if not is_oidc_enabled():
@@ -466,16 +471,8 @@ async def oidc_login():
     return {"authorization_url": auth_url, "state": state}
 
 
-@router.get(
-    "/oidc/callback",
-    summary="Exchange OIDC authorization code for session"
-)
-async def oidc_callback(
-    code: str,
-    response: Response,
-    request: Request,
-    db: Session = Depends(get_db)
-):
+@router.get("/oidc/callback", summary="Exchange OIDC authorization code for session")
+async def oidc_callback(code: str, response: Response, request: Request, db: Session = Depends(get_db)):
     """Processes OIDC code exchange, provisions user, and sets session cookie."""
     if not is_oidc_enabled():
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="OIDC is not enabled.")
@@ -516,7 +513,11 @@ async def oidc_callback(
         action="LOGIN_SUCCESS",
         user_id=str(user.id),
         ip_address=client_ip,
-        details={"provider": "OIDC/Keycloak", "username": user.username, "role": user.role}
+        details={
+            "provider": "OIDC/Keycloak",
+            "username": user.username,
+            "role": user.role,
+        },
     )
 
     normalized_role = Role.normalize(user.role)
@@ -551,15 +552,8 @@ async def oidc_callback(
 # ------------------------------------------------------------------------------
 # Self-Service Password Reset
 # ------------------------------------------------------------------------------
-@router.post(
-    "/forgot-password",
-    summary="Request a password reset link"
-)
-async def forgot_password(
-    payload: ForgotPasswordRequest,
-    request: Request,
-    db: Session = Depends(get_db)
-):
+@router.post("/forgot-password", summary="Request a password reset link")
+async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
     """
     Initiates self-service password reset. Sends email if SMTP is configured.
     Rate-limited to 3 requests per 15 minutes per IP.
@@ -585,7 +579,7 @@ async def forgot_password(
             action="PASSWORD_RESET_REQUESTED",
             user_id=str(user.id),
             ip_address=client_ip,
-            details={"email": clean_email}
+            details={"email": clean_email},
         )
 
     return {
@@ -593,21 +587,18 @@ async def forgot_password(
     }
 
 
-@router.post(
-    "/reset-password",
-    summary="Reset password using one-time verification token"
-)
-async def reset_password(
-    payload: ResetPasswordRequest,
-    request: Request,
-    db: Session = Depends(get_db)
-):
+@router.post("/reset-password", summary="Reset password using one-time verification token")
+async def reset_password(payload: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
     """Validates reset token and sets new password."""
     token_hash = hashlib.sha256(payload.token.strip().encode("utf-8")).hexdigest()
-    user = db.query(User).filter(
-        User.reset_token_hash == token_hash,
-        User.reset_token_expires_at > datetime.utcnow(),
-    ).first()
+    user = (
+        db.query(User)
+        .filter(
+            User.reset_token_hash == token_hash,
+            User.reset_token_expires_at > datetime.utcnow(),
+        )
+        .first()
+    )
 
     if not user:
         raise HTTPException(
@@ -632,7 +623,7 @@ async def reset_password(
         action="PASSWORD_RESET_COMPLETED",
         user_id=str(user.id),
         ip_address=client_ip,
-        details={"username": user.username}
+        details={"username": user.username},
     )
 
     return {"message": "Password has been successfully updated. You may now log in."}
@@ -641,20 +632,14 @@ async def reset_password(
 # ------------------------------------------------------------------------------
 # Session Endpoints
 # ------------------------------------------------------------------------------
-@router.post(
-    "/logout",
-    summary="Log out of the current session"
-)
+@router.post("/logout", summary="Log out of the current session")
 async def logout(response: Response):
     """Clears the HTTP-only access_token cookie."""
     response.delete_cookie(key="access_token")
     return {"message": "Logged out successfully."}
 
 
-@router.get(
-    "/me",
-    summary="Get current authenticated user profile"
-)
+@router.get("/me", summary="Get current authenticated user profile")
 async def get_me(current_user: User = Depends(get_current_user)):
     """Returns the profile and effective role of the authenticated caller."""
     return current_user.to_dict()
@@ -666,12 +651,12 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @router.post(
     "/api-keys",
     summary="Generate scoped machine API key for CI/CD pipelines",
-    dependencies=[Depends(require_role(["admin", "operator"]))]
+    dependencies=[Depends(require_role(["admin", "operator"]))],
 )
 async def create_machine_token(
     payload: ApiKeyCreateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Generates a secure CI/CD machine token (prefixed with rgb_live_...).
@@ -692,7 +677,11 @@ async def create_machine_token(
         db=db,
         action="API_KEY_CREATED",
         user_id=str(current_user.id),
-        details={"name": key_record.name, "role": key_record.role, "allowed_products": allowed_prods}
+        details={
+            "name": key_record.name,
+            "role": key_record.role,
+            "allowed_products": allowed_prods,
+        },
     )
 
     return {
@@ -711,12 +700,9 @@ async def create_machine_token(
 @router.get(
     "/api-keys",
     summary="List machine API keys",
-    dependencies=[Depends(require_role(["admin", "operator"]))]
+    dependencies=[Depends(require_role(["admin", "operator"]))],
 )
-async def list_machine_tokens(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def list_machine_tokens(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Lists registered CI/CD API machine tokens (token secrets are redacted)."""
     keys = db.query(ApiKey).order_by(ApiKey.created_at.desc()).all()
     return [k.to_dict() for k in keys]
@@ -725,12 +711,12 @@ async def list_machine_tokens(
 @router.delete(
     "/api-keys/{key_id}",
     summary="Revoke a machine API key",
-    dependencies=[Depends(require_role(["admin", "operator"]))]
+    dependencies=[Depends(require_role(["admin", "operator"]))],
 )
 async def revoke_machine_token(
     key_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Permanently revokes an API token."""
     key = db.query(ApiKey).filter(ApiKey.id == key_id).first()
@@ -745,7 +731,7 @@ async def revoke_machine_token(
         db=db,
         action="API_KEY_REVOKED",
         user_id=str(current_user.id),
-        details={"key_id": key_id, "name": key_name}
+        details={"key_id": key_id, "name": key_name},
     )
 
     return {"message": f"API Key '{key_name}' (id={key_id}) has been revoked."}
@@ -757,7 +743,7 @@ async def revoke_machine_token(
 @router.get(
     "/users",
     summary="List all registered system users",
-    dependencies=[Depends(require_role(["admin"]))]
+    dependencies=[Depends(require_role(["admin"]))],
 )
 async def list_users(db: Session = Depends(get_db)):
     """Lists all user accounts in ReguBOM."""
@@ -768,7 +754,7 @@ async def list_users(db: Session = Depends(get_db)):
 @router.post(
     "/users",
     summary="Create a new system user",
-    dependencies=[Depends(require_role(["admin"]))]
+    dependencies=[Depends(require_role(["admin"]))],
 )
 async def create_user(payload: UserCreateRequest, db: Session = Depends(get_db)):
     """Creates a local operator or auditor account."""

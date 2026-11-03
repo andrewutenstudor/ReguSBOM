@@ -6,19 +6,18 @@ Open-Core Architecture:
 Compliant with EU Cyber Resilience Act (CRA Art. 13), ENISA Technical Advisory (October 2026),
 BSI TR-03183-2 v2.1.0, and CISA 2026 Minimum Elements.
 """
+
 import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.routes import router as core_api_router
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.routes import router as core_api_router
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("regubom")
 
 app = FastAPI(
@@ -51,6 +50,7 @@ app.mount("/reports", StaticFiles(directory=str(settings.REPORT_DIR)), name="rep
 # 2. Dynamic Enterprise Edition Loader Hook
 try:
     from ee.loader import register_enterprise_extension
+
     register_enterprise_extension(app)
     logger.info("ReguBOM Enterprise Edition extension loaded successfully.")
 except (ImportError, ModuleNotFoundError):
@@ -67,7 +67,11 @@ async def startup_event():
 @app.get("/health")
 async def health_root():
     """Liveness probe endpoint."""
-    return {"status": "healthy", "service": settings.APP_NAME, "version": settings.VERSION}
+    return {
+        "status": "healthy",
+        "service": settings.APP_NAME,
+        "version": settings.VERSION,
+    }
 
 
 @app.get("/")

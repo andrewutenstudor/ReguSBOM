@@ -6,11 +6,12 @@ Automatically resolves common SBOM schema issues and formatting flaws:
 2. Maps common invalid/loose license strings (e.g., 'Apache 2', 'GPL 3') to valid SPDX identifiers ('Apache-2.0', 'GPL-3.0-only').
 """
 
-import re
 import copy
 import logging
-from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+import re
+from datetime import UTC, datetime
+from typing import Any
+
 try:
     import orjson
 except ImportError:
@@ -19,7 +20,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Common non-standard license strings mapped to official SPDX License Identifiers
-COMMON_LICENSE_MAP: Dict[str, str] = {
+COMMON_LICENSE_MAP: dict[str, str] = {
     # Apache variants
     "apache 2": "Apache-2.0",
     "apache 2.0": "Apache-2.0",
@@ -36,7 +37,6 @@ COMMON_LICENSE_MAP: Dict[str, str] = {
     "asl 2": "Apache-2.0",
     "apache 1.1": "Apache-1.1",
     "apache 1.0": "Apache-1.0",
-
     # GPL 3 variants
     "gpl 3": "GPL-3.0-only",
     "gpl 3.0": "GPL-3.0-only",
@@ -55,7 +55,6 @@ COMMON_LICENSE_MAP: Dict[str, str] = {
     "gpl 3+": "GPL-3.0-or-later",
     "gpl-3+": "GPL-3.0-or-later",
     "gplv3+": "GPL-3.0-or-later",
-
     # GPL 2 variants
     "gpl 2": "GPL-2.0-only",
     "gpl 2.0": "GPL-2.0-only",
@@ -74,7 +73,6 @@ COMMON_LICENSE_MAP: Dict[str, str] = {
     "gpl 2+": "GPL-2.0-or-later",
     "gpl-2+": "GPL-2.0-or-later",
     "gplv2+": "GPL-2.0-or-later",
-
     # LGPL variants
     "lgpl 3": "LGPL-3.0-only",
     "lgpl 3.0": "LGPL-3.0-only",
@@ -92,12 +90,10 @@ COMMON_LICENSE_MAP: Dict[str, str] = {
     "gnu lgpl 2.1": "LGPL-2.1-only",
     "lgpl 2": "LGPL-2.0-only",
     "lgpl 2.0": "LGPL-2.0-only",
-
     # MIT variants
     "mit": "MIT",
     "mit license": "MIT",
     "the mit license": "MIT",
-
     # BSD variants
     "bsd": "BSD-3-Clause",
     "bsd 3": "BSD-3-Clause",
@@ -112,7 +108,6 @@ COMMON_LICENSE_MAP: Dict[str, str] = {
     "bsd 2 clause": "BSD-2-Clause",
     "simplified bsd license": "BSD-2-Clause",
     "freebsd license": "BSD-2-Clause",
-
     # Other common licenses
     "isc": "ISC",
     "isc license": "ISC",
@@ -140,7 +135,7 @@ def _normalize_license_str(val: str) -> str:
     return re.sub(r"\s+", " ", str(val).strip()).lower()
 
 
-def map_license_identifier(val: Optional[str]) -> Optional[str]:
+def map_license_identifier(val: str | None) -> str | None:
     """
     Return a standardized SPDX identifier for known common license strings,
     or None if no mapping is found.
@@ -183,7 +178,7 @@ def _mend_license_entry(lic_entry: Any) -> None:
             lic_entry["expression"] = mapped_expr
 
 
-def _mend_component(comp: Dict[str, Any]) -> None:
+def _mend_component(comp: dict[str, Any]) -> None:
     """Mend license fields in a single component and recurse into subcomponents."""
     if not isinstance(comp, dict):
         return
@@ -208,7 +203,7 @@ def _mend_component(comp: Dict[str, Any]) -> None:
             _mend_component(sub)
 
 
-def mend_sbom(raw_json: Dict[str, Any], in_place: bool = True) -> Dict[str, Any]:
+def mend_sbom(raw_json: dict[str, Any], in_place: bool = True) -> dict[str, Any]:
     """
     Auto-mend an SBOM dictionary to fix common schema and compliance flaws.
 
@@ -245,7 +240,7 @@ def mend_sbom(raw_json: Dict[str, Any], in_place: bool = True) -> Dict[str, Any]
 
     current_timestamp = metadata.get("timestamp")
     if not current_timestamp or not str(current_timestamp).strip():
-        injected_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        injected_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         metadata["timestamp"] = injected_ts
         logger.info(f"[Auto-Mend] Injected missing metadata.timestamp: {injected_ts}")
 

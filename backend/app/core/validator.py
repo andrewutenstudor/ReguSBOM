@@ -5,17 +5,16 @@ aggiuntivi per la conformità al Cyber Resilience Act (CRA) e alla Direttiva NIS
 Integrates ACN modulo_SBOM validator with additional CRA and NIS2 compliance checks.
 """
 
-import sys
-import os
-import json
-import time
-import re
 import hashlib
-from pathlib import Path
-from datetime import datetime
+import json
+import re
+import sys
+import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Tuple, Union
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 try:
     import orjson
@@ -39,8 +38,8 @@ _CURRENT_FILE = Path(__file__).resolve()
 _CANDIDATE_PATHS = [
     _CURRENT_FILE.parents[3] / "modulo_SBOM_src",  # Local repo root / modulo_SBOM_src
     _CURRENT_FILE.parents[2] / "modulo_SBOM_src",  # Docker container /app/modulo_SBOM_src
-    _CURRENT_FILE.parents[2] / "vendor",           # backend/vendor fallback
-    Path("/app/modulo_SBOM_src"),                  # Explicit container path
+    _CURRENT_FILE.parents[2] / "vendor",  # backend/vendor fallback
+    Path("/app/modulo_SBOM_src"),  # Explicit container path
 ]
 
 for _cand in _CANDIDATE_PATHS:
@@ -49,16 +48,23 @@ for _cand in _CANDIDATE_PATHS:
 
 try:
     from modulo_SBOM import (
-        SBOMValidator as AcnSBOMValidator,
-        ValidationConfig as AcnValidationConfig,
-        ValidationResults as AcnValidationResults,
-        MINIMUM_COMPONENT_FIELDS,
         ADDITIONAL_COMPONENT_FIELDS,
-        MINIMUM_SERVICE_FIELDS,
         ADDITIONAL_SERVICE_FIELDS,
+        MINIMUM_COMPONENT_FIELDS,
+        MINIMUM_SERVICE_FIELDS,
         WHITELISTED_COUNTRIES,
         OutputFormat,
     )
+    from modulo_SBOM import (
+        SBOMValidator as AcnSBOMValidator,
+    )
+    from modulo_SBOM import (
+        ValidationConfig as AcnValidationConfig,
+    )
+    from modulo_SBOM import (
+        ValidationResults as AcnValidationResults,
+    )
+
     ACN_AVAILABLE = True
 except ImportError as e:
     ACN_AVAILABLE = False
@@ -83,7 +89,8 @@ def _initialize_cyclonedx_schema():
 
     try:
         from cyclonedx.schema import SchemaVersion
-        from cyclonedx.schema._res import BOM_JSON, SPDX_JSON, JSF
+        from cyclonedx.schema._res import BOM_JSON, JSF, SPDX_JSON
+
         cyclonedx_bom_path = BOM_JSON.get(SchemaVersion.V1_6)
         cyclonedx_spdx_path = SPDX_JSON
         cyclonedx_jsf_path = JSF
@@ -94,7 +101,7 @@ def _initialize_cyclonedx_schema():
 
     schemas_dir = _CURRENT_FILE.parent.parent / "schemas"
 
-    def _read_schema(filename: str, fallback_path: Optional[str]) -> Optional[dict]:
+    def _read_schema(filename: str, fallback_path: str | None) -> dict | None:
         local_file = schemas_dir / filename
         if local_file.exists():
             with open(local_file, "r", encoding="utf-8") as f:
@@ -137,7 +144,7 @@ def _initialize_cyclonedx_schema():
 COMPILED_CYCLONEDX_SCHEMA = _initialize_cyclonedx_schema()
 
 
-def validate_cyclonedx_schema(sbom_dict: Dict[str, Any]) -> Tuple[bool, List[str]]:
+def validate_cyclonedx_schema(sbom_dict: dict[str, Any]) -> tuple[bool, list[str]]:
     """
     Validates an SBOM dictionary against CycloneDX v1.6 schema using compiled fastjsonschema.
     Returns:
@@ -158,6 +165,7 @@ def validate_cyclonedx_schema(sbom_dict: Dict[str, Any]) -> Tuple[bool, List[str
 
 
 if ACN_AVAILABLE:
+
     def _patched_acn_validate_schema(self, file_handle) -> bool:
         """Patched AcnSBOMValidator.validate_schema using compiled fastjsonschema."""
         self._log_verbose("Avvio validazione dello schema CycloneDX v1.6 (fastjsonschema)")
@@ -171,11 +179,15 @@ if ACN_AVAILABLE:
 
             is_valid, errors = validate_cyclonedx_schema(data)
             if not is_valid:
-                self._add_output_line(f"{OutputFormat.WARNING} La SBOM non è valida rispetto allo schema CycloneDX v1.6. Errori riscontrati:")
+                self._add_output_line(
+                    f"{OutputFormat.WARNING} La SBOM non è valida rispetto allo schema CycloneDX v1.6. Errori riscontrati:"
+                )
                 for err in errors:
                     self._add_output_line(f" - {err}")
                 return False
-            self._log_verbose("Validazione della SBOM secondo lo schema CycloneDX v1.6 avvenuta con successo (fastjsonschema)")
+            self._log_verbose(
+                "Validazione della SBOM secondo lo schema CycloneDX v1.6 avvenuta con successo (fastjsonschema)"
+            )
             return True
         except Exception as e:
             self._add_output_line(f"[!] Validazione dello schema CycloneDX v1.6 fallita: {e}")
@@ -187,20 +199,48 @@ if ACN_AVAILABLE:
 # ---------------------------------------------------------------------------
 # SPDX valid license identifiers (subset — expanded as needed)
 # ---------------------------------------------------------------------------
-VALID_SPDX_LICENSES = frozenset([
-    "MIT", "Apache-2.0", "GPL-2.0", "GPL-2.0-only", "GPL-2.0-or-later",
-    "GPL-3.0", "GPL-3.0-only", "GPL-3.0-or-later", "LGPL-2.0", "LGPL-2.1",
-    "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0", "LGPL-3.0-only",
-    "LGPL-3.0-or-later", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MPL-2.0",
-    "CDDL-1.0", "EPL-1.0", "EPL-2.0", "AGPL-3.0", "AGPL-3.0-only",
-    "AGPL-3.0-or-later", "CC0-1.0", "Unlicense", "EUPL-1.2", "EUPL-1.1",
-    "NOASSERTION", "NONE",
-])
+VALID_SPDX_LICENSES = frozenset(
+    [
+        "MIT",
+        "Apache-2.0",
+        "GPL-2.0",
+        "GPL-2.0-only",
+        "GPL-2.0-or-later",
+        "GPL-3.0",
+        "GPL-3.0-only",
+        "GPL-3.0-or-later",
+        "LGPL-2.0",
+        "LGPL-2.1",
+        "LGPL-2.1-only",
+        "LGPL-2.1-or-later",
+        "LGPL-3.0",
+        "LGPL-3.0-only",
+        "LGPL-3.0-or-later",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "ISC",
+        "MPL-2.0",
+        "CDDL-1.0",
+        "EPL-1.0",
+        "EPL-2.0",
+        "AGPL-3.0",
+        "AGPL-3.0-only",
+        "AGPL-3.0-or-later",
+        "CC0-1.0",
+        "Unlicense",
+        "EUPL-1.2",
+        "EUPL-1.1",
+        "NOASSERTION",
+        "NONE",
+    ]
+)
 
-ALLOWED_CORPORATE_LICENSE_REFS = frozenset([
-    "LicenseRef-Proprietary",
-    "LicenseRef-InternalUseOnly",
-])
+ALLOWED_CORPORATE_LICENSE_REFS = frozenset(
+    [
+        "LicenseRef-Proprietary",
+        "LicenseRef-InternalUseOnly",
+    ]
+)
 
 HASH_ALGORITHMS = frozenset({"SHA-512", "SHA512", "SHA-256", "SHA256"})
 HASH_SHA512_ALGS = frozenset({"SHA-512", "SHA512"})
@@ -211,6 +251,7 @@ EXPR_TOKEN_REGEX = re.compile(r"\b[A-Za-z0-9.-]+\b")
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 class ValidationProfile(str, Enum):
     STRICT = "STRICT"
     LEGACY = "LEGACY"
@@ -219,20 +260,22 @@ class ValidationProfile(str, Enum):
 @dataclass
 class ValidationConfig:
     """Parametri di configurazione per ExtendedSBOMValidator."""
+
     max_size_mb: int = 50
     verbose: bool = False
     skip_schema: bool = False
-    profile: Union[ValidationProfile, str] = ValidationProfile.STRICT
+    profile: ValidationProfile | str = ValidationProfile.STRICT
 
 
 @dataclass
 class ValidationCheck:
     """Risultato di un singolo controllo di validazione."""
+
     name: str
-    category: str          # schema | metadata | component | service | cra | nis2 | acn
+    category: str  # schema | metadata | component | service | cra | nis2 | acn
     passed: bool
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 
     def to_dict(self) -> dict:
         d = {
@@ -249,27 +292,28 @@ class ValidationCheck:
 @dataclass
 class ValidationReport:
     """Report completo di validazione SBOM."""
+
     filename: str
     sbom_format: str
     schema_version: str
     overall_valid: bool
-    overall_status: str         # PASS | FAIL | WARNING
+    overall_status: str  # PASS | FAIL | WARNING
     processing_time: float
     profile: str = "STRICT"
-    checks: List[ValidationCheck] = field(default_factory=list)
-    statistics: Dict[str, Any] = field(default_factory=dict)
-    sbom_summary: Dict[str, Any] = field(default_factory=dict)
-    acn_output_lines: List[str] = field(default_factory=list)  # raw ACN text output
-    acn_results: Optional[Dict[str, Any]] = None
-    warnings: List[Dict[str, Any]] = field(default_factory=list)
-    file_imprint: Dict[str, Any] = field(default_factory=dict)
-    root_product: Dict[str, Any] = field(default_factory=dict)
+    checks: list[ValidationCheck] = field(default_factory=list)
+    statistics: dict[str, Any] = field(default_factory=dict)
+    sbom_summary: dict[str, Any] = field(default_factory=dict)
+    acn_output_lines: list[str] = field(default_factory=list)  # raw ACN text output
+    acn_results: dict[str, Any] | None = None
+    warnings: list[dict[str, Any]] = field(default_factory=list)
+    file_imprint: dict[str, Any] = field(default_factory=dict)
+    root_product: dict[str, Any] = field(default_factory=dict)
     root_product_name: str = "N/D"
     root_product_version: str = "N/D"
     serial_number: str = "N/D"
-    cra_checklist: List[Dict[str, Any]] = field(default_factory=list)
-    cra_checklist_status: Dict[str, bool] = field(default_factory=dict)
-    component_matrix: List[Dict[str, Any]] = field(default_factory=list)
+    cra_checklist: list[dict[str, Any]] = field(default_factory=list)
+    cra_checklist_status: dict[str, bool] = field(default_factory=dict)
+    component_matrix: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         passed = sum(1 for c in self.checks if c.passed)
@@ -319,6 +363,7 @@ class ValidationReport:
 # Core vs. Third-Party Component Identification
 # ---------------------------------------------------------------------------
 
+
 def is_core_component(component: dict, is_metadata: bool = False) -> bool:
     """
     Determines whether a component is a company 'Core' component.
@@ -342,10 +387,10 @@ def is_core_component(component: dict, is_metadata: bool = False) -> bool:
     return False
 
 
-def partition_components(components: list) -> Tuple[List[dict], List[dict]]:
+def partition_components(components: list) -> tuple[list[dict], list[dict]]:
     """Partition components in a single pass into core and third-party lists."""
-    core_comps: List[dict] = []
-    tp_comps: List[dict] = []
+    core_comps: list[dict] = []
+    tp_comps: list[dict] = []
     if not isinstance(components, list):
         return core_comps, tp_comps
 
@@ -375,16 +420,20 @@ def is_spdx_license(comp: dict) -> bool:
                 lic_id = lic_obj.get("id")
                 if lic_id:
                     clean_id = str(lic_id).strip()
-                    if (clean_id in VALID_SPDX_LICENSES or 
-                        clean_id.startswith("LicenseRef-") or 
-                        clean_id in ALLOWED_CORPORATE_LICENSE_REFS):
+                    if (
+                        clean_id in VALID_SPDX_LICENSES
+                        or clean_id.startswith("LicenseRef-")
+                        or clean_id in ALLOWED_CORPORATE_LICENSE_REFS
+                    ):
                         return True
                 lic_name = lic_obj.get("name")
                 if lic_name:
                     clean_name = str(lic_name).strip()
-                    if (clean_name in VALID_SPDX_LICENSES or 
-                        clean_name.startswith("LicenseRef-") or 
-                        clean_name in ALLOWED_CORPORATE_LICENSE_REFS):
+                    if (
+                        clean_name in VALID_SPDX_LICENSES
+                        or clean_name.startswith("LicenseRef-")
+                        or clean_name in ALLOWED_CORPORATE_LICENSE_REFS
+                    ):
                         return True
     return False
 
@@ -416,7 +465,11 @@ def is_in_dependencies_graph(comp: dict, sbom_dict_or_dep_refs: Any) -> bool:
         dep_refs = sbom_dict_or_dep_refs
     else:
         dep_refs = set()
-        deps_list = sbom_dict_or_dep_refs.get("dependencies") if isinstance(sbom_dict_or_dep_refs, dict) and isinstance(sbom_dict_or_dep_refs.get("dependencies"), list) else []
+        deps_list = (
+            sbom_dict_or_dep_refs.get("dependencies")
+            if isinstance(sbom_dict_or_dep_refs, dict) and isinstance(sbom_dict_or_dep_refs.get("dependencies"), list)
+            else []
+        )
         for dep in deps_list:
             if isinstance(dep, dict):
                 r = dep.get("ref")
@@ -430,15 +483,16 @@ def is_in_dependencies_graph(comp: dict, sbom_dict_or_dep_refs: Any) -> bool:
     purl = comp.get("purl")
     c_name = comp.get("name")
     return bool(
-        (c_bom_ref and str(c_bom_ref) in dep_refs) or
-        (purl and str(purl) in dep_refs) or
-        (c_name and str(c_name) in dep_refs)
+        (c_bom_ref and str(c_bom_ref) in dep_refs)
+        or (purl and str(purl) in dep_refs)
+        or (c_name and str(c_name) in dep_refs)
     )
 
 
 # ---------------------------------------------------------------------------
 # Extended Validator
 # ---------------------------------------------------------------------------
+
 
 class ExtendedSBOMValidator:
     """
@@ -474,8 +528,8 @@ class ExtendedSBOMValidator:
     def validate_sbom(
         self,
         filepath: str,
-        sbom_data: Optional[Dict[str, Any]] = None,
-        file_imprint: Optional[Dict[str, Any]] = None,
+        sbom_data: dict[str, Any] | None = None,
+        file_imprint: dict[str, Any] | None = None,
     ) -> ValidationReport:
         """
         Valida un file SBOM e restituisce un ValidationReport strutturato.
@@ -510,12 +564,14 @@ class ExtendedSBOMValidator:
                     processing_time=elapsed,
                     file_imprint=file_imprint,
                 )
-                report.checks.append(ValidationCheck(
-                    name="Parsing JSON",
-                    category="schema",
-                    passed=False,
-                    message=f"Il file non è un JSON valido / Invalid JSON: {e}",
-                ))
+                report.checks.append(
+                    ValidationCheck(
+                        name="Parsing JSON",
+                        category="schema",
+                        passed=False,
+                        message=f"Il file non è un JSON valido / Invalid JSON: {e}",
+                    )
+                )
                 return report
 
         if file_imprint is None:
@@ -524,25 +580,31 @@ class ExtendedSBOMValidator:
         sbom_format = self._detect_format(sbom_data)
         schema_version = str(sbom_data.get("specVersion") or sbom_data.get("spdxVersion") or "unknown").strip()
 
-        checks: List[ValidationCheck] = []
-        acn_output_lines: List[str] = []
-        acn_results_dict: Optional[Dict] = None
+        checks: list[ValidationCheck] = []
+        acn_output_lines: list[str] = []
+        acn_results_dict: dict | None = None
 
         # --------------------------------------------------------------
         # Task 3: Format/Schema Check: Must strictly be CycloneDX v1.6 or v1.7. If not, FAIL the whole file.
         # --------------------------------------------------------------
         if sbom_format != "cyclonedx" or schema_version not in ["1.6", "1.7"]:
             elapsed = time.time() - start
-            checks.append(ValidationCheck(
-                name="Validazione formato e versione CycloneDX (v1.6 / v1.7) / CycloneDX Format",
-                category="schema",
-                passed=False,
-                message=(
-                    f"Non conforme: rilevato '{sbom_format}' v{schema_version} (richiesto CycloneDX 1.6 o 1.7). "
-                    f"CycloneDX 1.5 or lower and non-CycloneDX formats are rejected."
-                ),
-                details={"detected_format": sbom_format, "detected_version": schema_version, "required": "CycloneDX 1.6 o 1.7"}
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="Validazione formato e versione CycloneDX (v1.6 / v1.7) / CycloneDX Format",
+                    category="schema",
+                    passed=False,
+                    message=(
+                        f"Non conforme: rilevato '{sbom_format}' v{schema_version} (richiesto CycloneDX 1.6 o 1.7). "
+                        f"CycloneDX 1.5 or lower and non-CycloneDX formats are rejected."
+                    ),
+                    details={
+                        "detected_format": sbom_format,
+                        "detected_version": schema_version,
+                        "required": "CycloneDX 1.6 o 1.7",
+                    },
+                )
+            )
             cra_data = self._build_cra_compliance_data(sbom_data, filepath=filepath, file_imprint=file_imprint)
             return ValidationReport(
                 filename=filename,
@@ -553,7 +615,12 @@ class ExtendedSBOMValidator:
                 processing_time=elapsed,
                 profile=self.profile.value,
                 checks=checks,
-                statistics={"total_checks": 1, "passed_checks": 0, "failed_checks": 1, "processing_time_seconds": elapsed},
+                statistics={
+                    "total_checks": 1,
+                    "passed_checks": 0,
+                    "failed_checks": 1,
+                    "processing_time_seconds": elapsed,
+                },
                 sbom_summary={"format": sbom_format, "schema_version": schema_version},
                 file_imprint=cra_data["file_imprint"],
                 root_product=cra_data["root_product"],
@@ -571,13 +638,15 @@ class ExtendedSBOMValidator:
         components = sbom_data.get("components")
         if components is None or not isinstance(components, list) or len(components) == 0:
             elapsed = time.time() - start
-            checks.append(ValidationCheck(
-                name="Presenza componenti / Components Presence",
-                category="component",
-                passed=False,
-                message="L'SBOM non contiene componenti (elenco 'components' vuoto o assente). L'SBOM deve contenere almeno un componente. / SBOM lacks components entirely.",
-                details={"components_count": 0}
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="Presenza componenti / Components Presence",
+                    category="component",
+                    passed=False,
+                    message="L'SBOM non contiene componenti (elenco 'components' vuoto o assente). L'SBOM deve contenere almeno un componente. / SBOM lacks components entirely.",
+                    details={"components_count": 0},
+                )
+            )
             cra_data = self._build_cra_compliance_data(sbom_data, filepath=filepath, file_imprint=file_imprint)
             return ValidationReport(
                 filename=filename,
@@ -588,8 +657,17 @@ class ExtendedSBOMValidator:
                 processing_time=elapsed,
                 profile=self.profile.value,
                 checks=checks,
-                statistics={"total_checks": 1, "passed_checks": 0, "failed_checks": 1, "processing_time_seconds": elapsed},
-                sbom_summary={"format": sbom_format, "schema_version": schema_version, "components_count": 0},
+                statistics={
+                    "total_checks": 1,
+                    "passed_checks": 0,
+                    "failed_checks": 1,
+                    "processing_time_seconds": elapsed,
+                },
+                sbom_summary={
+                    "format": sbom_format,
+                    "schema_version": schema_version,
+                    "components_count": 0,
+                },
                 file_imprint=cra_data["file_imprint"],
                 root_product=cra_data["root_product"],
                 root_product_name=cra_data["root_product_name"],
@@ -610,15 +688,11 @@ class ExtendedSBOMValidator:
         checks.extend(acn_checks)
 
         # ---- Phase 2: CRA Checks ----
-        cra_checks = self._run_cra_checks(
-            sbom_data, sbom_format, core_comps=core_comps, tp_comps=tp_comps
-        )
+        cra_checks = self._run_cra_checks(sbom_data, sbom_format, core_comps=core_comps, tp_comps=tp_comps)
         checks.extend(cra_checks)
 
         # ---- Phase 3: NIS2 Checks ----
-        nis2_checks = self._run_nis2_checks(
-            sbom_data, sbom_format, core_comps=core_comps, tp_comps=tp_comps
-        )
+        nis2_checks = self._run_nis2_checks(sbom_data, sbom_format, core_comps=core_comps, tp_comps=tp_comps)
         checks.extend(nis2_checks)
 
         # ---- Compute overall result ----
@@ -654,7 +728,7 @@ class ExtendedSBOMValidator:
             filepath=filepath,
             file_imprint=file_imprint,
             core_comps=core_comps,
-            tp_comps=tp_comps
+            tp_comps=tp_comps,
         )
         statistics["core_components_count"] = cra_data["core_components_count"]
         statistics["third_party_components_count"] = cra_data["third_party_components_count"]
@@ -662,19 +736,27 @@ class ExtendedSBOMValidator:
         elapsed = time.time() - start
 
         # ---- Aggregate third-party / non-blocking warnings ----
-        report_warnings: List[Dict[str, Any]] = []
+        report_warnings: list[dict[str, Any]] = []
         for c in checks:
             d = c.details or {}
-            items = d.get("missing_items") or d.get("invalid_elements") or d.get("third_party_missing") or d.get("third_party_sloppy") or []
+            items = (
+                d.get("missing_items")
+                or d.get("invalid_elements")
+                or d.get("third_party_missing")
+                or d.get("third_party_sloppy")
+                or []
+            )
             is_warning = bool(d.get("warning") or (c.passed and len(items) > 0) or d.get("warning_message"))
             if is_warning:
-                report_warnings.append({
-                    "check_name": c.name,
-                    "category": c.category,
-                    "count": len(items) if items else int(d.get("invalid", 0) or 1),
-                    "message": d.get("warning_message") or c.message,
-                    "items": items,
-                })
+                report_warnings.append(
+                    {
+                        "check_name": c.name,
+                        "category": c.category,
+                        "count": len(items) if items else int(d.get("invalid", 0) or 1),
+                        "message": d.get("warning_message") or c.message,
+                        "items": items,
+                    }
+                )
 
         return ValidationReport(
             filename=filename,
@@ -704,7 +786,7 @@ class ExtendedSBOMValidator:
     # CRA Corporate Compliance & File Imprint Helpers
     # ------------------------------------------------------------------
 
-    def _calculate_file_imprint(self, filepath: str = "", raw_bytes: Optional[bytes] = None) -> Dict[str, Any]:
+    def _calculate_file_imprint(self, filepath: str = "", raw_bytes: bytes | None = None) -> dict[str, Any]:
         """Calcola l'impronta crittografica (SHA-256, SHA-512) e la dimensione del file."""
         try:
             data = raw_bytes
@@ -731,11 +813,11 @@ class ExtendedSBOMValidator:
         self,
         sbom_data: dict,
         filepath: str = "",
-        raw_bytes: Optional[bytes] = None,
-        file_imprint: Optional[Dict[str, Any]] = None,
-        core_comps: Optional[List[dict]] = None,
-        tp_comps: Optional[List[dict]] = None,
-    ) -> Dict[str, Any]:
+        raw_bytes: bytes | None = None,
+        file_imprint: dict[str, Any] | None = None,
+        core_comps: list[dict] | None = None,
+        tp_comps: list[dict] | None = None,
+    ) -> dict[str, Any]:
         """
         Estrae il prodotto radice, calcola l'impronta del file, la checklist CRA a 11 punti
         e la matrice di completezza per ogni componente.
@@ -802,12 +884,19 @@ class ExtendedSBOMValidator:
                     if child:
                         dep_refs.add(str(child))
 
-        component_matrix: List[Dict[str, Any]] = []
+        component_matrix: list[dict[str, Any]] = []
 
         for c in components:
             if not isinstance(c, dict):
                 continue
-            is_core = bool(any(isinstance(p, dict) and p.get("name") == "company:core-component" and str(p.get("value")).lower() == "true" for p in (c.get("properties") if isinstance(c.get("properties"), list) else [])))
+            is_core = bool(
+                any(
+                    isinstance(p, dict)
+                    and p.get("name") == "company:core-component"
+                    and str(p.get("value")).lower() == "true"
+                    for p in (c.get("properties") if isinstance(c.get("properties"), list) else [])
+                )
+            )
 
             c_name = c.get("name", "N/D") or "N/D"
             c_version = c.get("version") or "vN/D"
@@ -829,37 +918,53 @@ class ExtendedSBOMValidator:
             if has_license == "✕":
                 missing_license += 1
 
-            component_matrix.append({
-                "name": c_name,
-                "version": c_version,
-                "has_version": has_version,
-                "is_core": is_core,
-                "has_id": has_id,
-                "has_supplier": has_supplier,
-                "has_hash": has_hash,
-                "has_license": has_license,
-                "has_dependencies": has_dependencies,
-            })
+            component_matrix.append(
+                {
+                    "name": c_name,
+                    "version": c_version,
+                    "has_version": has_version,
+                    "is_core": is_core,
+                    "has_id": has_id,
+                    "has_supplier": has_supplier,
+                    "has_hash": has_hash,
+                    "has_license": has_license,
+                    "has_dependencies": has_dependencies,
+                }
+            )
 
         # 3. 12-Point CRA Checklist (Section 4.1.1)
         fmt = self._detect_format(sbom_data)
         spec_ver = str(sbom_data.get("specVersion") or sbom_data.get("spdxVersion") or "unknown").strip()
-        p1_passed = (fmt.lower() == "cyclonedx" and spec_ver in ["1.6", "1.7"])
-        p1_detail = f"Conforme: rilevato CycloneDX v{spec_ver}" if p1_passed else f"Non conforme: rilevato {fmt} v{spec_ver} (richiesto CycloneDX 1.6 o 1.7)"
+        p1_passed = fmt.lower() == "cyclonedx" and spec_ver in ["1.6", "1.7"]
+        p1_detail = (
+            f"Conforme: rilevato CycloneDX v{spec_ver}"
+            if p1_passed
+            else f"Non conforme: rilevato {fmt} v{spec_ver} (richiesto CycloneDX 1.6 o 1.7)"
+        )
 
         deps = sbom_data.get("dependencies")
         p2_passed = isinstance(deps, list) and len(deps) > 0
-        p2_detail = f"Presenti ({len(deps)} relazioni)" if p2_passed else "Grafo delle dipendenze di primo livello assente"
+        p2_detail = (
+            f"Presenti ({len(deps)} relazioni)" if p2_passed else "Grafo delle dipendenze di primo livello assente"
+        )
 
         has_root_name = bool(root_comp.get("name") and str(root_comp.get("name")).strip())
         has_root_ver = bool(root_comp.get("version") and str(root_comp.get("version")).strip())
         p3_passed = has_root_name and has_root_ver
-        p3_detail = f"{root_product_name} v{root_product_version}" if p3_passed else (
-            "Nome o versione mancante nel componente root" if (has_root_name or has_root_ver) else "Componente root non definito nei metadati"
+        p3_detail = (
+            f"{root_product_name} v{root_product_version}"
+            if p3_passed
+            else (
+                "Nome o versione mancante nel componente root"
+                if (has_root_name or has_root_ver)
+                else "Componente root non definito nei metadati"
+            )
         )
 
         p4_passed = bool(root_supplier)
-        p4_detail = f"Fornitore: {root_supplier}" if p4_passed else "Produttore o fornitore del prodotto root non indicato"
+        p4_detail = (
+            f"Fornitore: {root_supplier}" if p4_passed else "Produttore o fornitore del prodotto root non indicato"
+        )
 
         ts = metadata.get("timestamp")
         p5_passed = bool(ts and isinstance(ts, str) and len(ts.strip()) >= 10)
@@ -868,36 +973,70 @@ class ExtendedSBOMValidator:
         tools = metadata.get("tools")
         authors = metadata.get("authors")
         has_tools = bool(
-            (isinstance(tools, list) and len(tools) > 0) or
-            (isinstance(tools, dict) and bool(tools.get("components") or tools.get("services")))
+            (isinstance(tools, list) and len(tools) > 0)
+            or (isinstance(tools, dict) and bool(tools.get("components") or tools.get("services")))
         )
         has_authors = bool(isinstance(authors, list) and len(authors) > 0)
         p6_passed = has_tools or has_authors
-        p6_detail = "Origine identificata (tools/authors presenti)" if p6_passed else "Origine della SBOM non indicata (tools o authors assenti)"
-
-        p7_passed = (total_comps > 0 and missing_supplier == 0)
-        p7_detail = "Tutti i componenti hanno un fornitore indicato" if p7_passed else (
-            f"manca in {missing_supplier} componenti su {total_comps}" if total_comps > 0 else "Nessun componente presente"
+        p6_detail = (
+            "Origine identificata (tools/authors presenti)"
+            if p6_passed
+            else "Origine della SBOM non indicata (tools o authors assenti)"
         )
 
-        p8_passed = (total_comps > 0 and missing_hash == 0)
-        p8_detail = "Tutti i componenti hanno hash di integrità" if p8_passed else (
-            f"manca in {missing_hash} componenti su {total_comps}" if total_comps > 0 else "Nessun componente presente"
+        p7_passed = total_comps > 0 and missing_supplier == 0
+        p7_detail = (
+            "Tutti i componenti hanno un fornitore indicato"
+            if p7_passed
+            else (
+                f"manca in {missing_supplier} componenti su {total_comps}"
+                if total_comps > 0
+                else "Nessun componente presente"
+            )
         )
 
-        p9_passed = (total_comps > 0 and missing_version == 0)
-        p9_detail = "Tutti i componenti hanno una versione definita" if p9_passed else (
-            f"manca in {missing_version} componenti su {total_comps}" if total_comps > 0 else "Nessun componente presente"
+        p8_passed = total_comps > 0 and missing_hash == 0
+        p8_detail = (
+            "Tutti i componenti hanno hash di integrità"
+            if p8_passed
+            else (
+                f"manca in {missing_hash} componenti su {total_comps}"
+                if total_comps > 0
+                else "Nessun componente presente"
+            )
         )
 
-        p10_passed = (total_comps > 0 and missing_id == 0)
-        p10_detail = "Tutti i componenti hanno un identificativo univoco (PURL/CPE)" if p10_passed else (
-            f"manca in {missing_id} componenti su {total_comps}" if total_comps > 0 else "Nessun componente presente"
+        p9_passed = total_comps > 0 and missing_version == 0
+        p9_detail = (
+            "Tutti i componenti hanno una versione definita"
+            if p9_passed
+            else (
+                f"manca in {missing_version} componenti su {total_comps}"
+                if total_comps > 0
+                else "Nessun componente presente"
+            )
         )
 
-        p11_passed = (total_comps > 0 and missing_license == 0)
-        p11_detail = "Tutti i componenti hanno una licenza dichiarata" if p11_passed else (
-            f"manca in {missing_license} componenti su {total_comps}" if total_comps > 0 else "Nessun componente presente"
+        p10_passed = total_comps > 0 and missing_id == 0
+        p10_detail = (
+            "Tutti i componenti hanno un identificativo univoco (PURL/CPE)"
+            if p10_passed
+            else (
+                f"manca in {missing_id} componenti su {total_comps}"
+                if total_comps > 0
+                else "Nessun componente presente"
+            )
+        )
+
+        p11_passed = total_comps > 0 and missing_license == 0
+        p11_detail = (
+            "Tutti i componenti hanno una licenza dichiarata"
+            if p11_passed
+            else (
+                f"manca in {missing_license} componenti su {total_comps}"
+                if total_comps > 0
+                else "Nessun componente presente"
+            )
         )
 
         p12_passed = True
@@ -1042,7 +1181,7 @@ class ExtendedSBOMValidator:
             },
         ]
 
-        cra_checklist_status: Dict[str, bool] = {}
+        cra_checklist_status: dict[str, bool] = {}
         for item in cra_checklist:
             cra_checklist_status[item["id"]] = item["passed"]
             cra_checklist_status[item["title"]] = item["passed"]
@@ -1079,22 +1218,24 @@ class ExtendedSBOMValidator:
     def _run_acn_validation(
         self,
         filepath: str,
-        sbom_data: Optional[dict] = None,
-        core_comps: Optional[List[dict]] = None,
-        tp_comps: Optional[List[dict]] = None,
-    ) -> Tuple[List[ValidationCheck], List[str], Optional[Dict]]:
+        sbom_data: dict | None = None,
+        core_comps: list[dict] | None = None,
+        tp_comps: list[dict] | None = None,
+    ) -> tuple[list[ValidationCheck], list[str], dict | None]:
         """Esegue la validazione ACN e mappa i risultati in ValidationCheck."""
-        checks: List[ValidationCheck] = []
-        output_lines: List[str] = []
-        results_dict: Optional[Dict] = None
+        checks: list[ValidationCheck] = []
+        output_lines: list[str] = []
+        results_dict: dict | None = None
 
         if not ACN_AVAILABLE:
-            checks.append(ValidationCheck(
-                name="Modulo ACN",
-                category="acn",
-                passed=False,
-                message=f"modulo_SBOM non trovato / ACN module not found: {_ACN_IMPORT_ERROR}",
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="Modulo ACN",
+                    category="acn",
+                    passed=False,
+                    message=f"modulo_SBOM non trovato / ACN module not found: {_ACN_IMPORT_ERROR}",
+                )
+            )
             return checks, output_lines, results_dict
 
         try:
@@ -1133,44 +1274,50 @@ class ExtendedSBOMValidator:
 
             # -- Schema check --
             if not acn_results.schema_skipped:
-                checks.append(ValidationCheck(
-                    name="Validazione schema CycloneDX v1.6 / CycloneDX v1.6 Schema",
-                    category="schema",
-                    passed=acn_results.schema_valid,
-                    message=(
-                        "Schema CycloneDX v1.6 valido / Valid CycloneDX v1.6 schema."
-                        if acn_results.schema_valid else
-                        "Schema CycloneDX v1.6 non valido / Invalid CycloneDX v1.6 schema. Vedere output ACN."
-                    ),
-                    details={"acn_output_snippet": output_lines[:10]},
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="Validazione schema CycloneDX v1.6 / CycloneDX v1.6 Schema",
+                        category="schema",
+                        passed=acn_results.schema_valid,
+                        message=(
+                            "Schema CycloneDX v1.6 valido / Valid CycloneDX v1.6 schema."
+                            if acn_results.schema_valid
+                            else "Schema CycloneDX v1.6 non valido / Invalid CycloneDX v1.6 schema. Vedere output ACN."
+                        ),
+                        details={"acn_output_snippet": output_lines[:10]},
+                    )
+                )
             else:
-                checks.append(ValidationCheck(
-                    name="Validazione schema CycloneDX v1.6 / CycloneDX v1.6 Schema",
-                    category="schema",
-                    passed=True,
-                    message="Validazione schema saltata su richiesta / Schema validation skipped.",
-                    details={"skipped": True},
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="Validazione schema CycloneDX v1.6 / CycloneDX v1.6 Schema",
+                        category="schema",
+                        passed=True,
+                        message="Validazione schema saltata su richiesta / Schema validation skipped.",
+                        details={"skipped": True},
+                    )
+                )
 
             # -- Metadata check --
-            checks.append(ValidationCheck(
-                name="Validazione metadata SBOM / SBOM Metadata",
-                category="metadata",
-                passed=acn_results.metadata_valid,
-                message=(
-                    "Campo metadata.component presente e valido / metadata.component present and valid."
-                    if acn_results.metadata_valid else
-                    "Campo metadata.component assente o non valido / metadata.component missing or invalid."
-                ),
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="Validazione metadata SBOM / SBOM Metadata",
+                    category="metadata",
+                    passed=acn_results.metadata_valid,
+                    message=(
+                        "Campo metadata.component presente e valido / metadata.component present and valid."
+                        if acn_results.metadata_valid
+                        else "Campo metadata.component assente o non valido / metadata.component missing or invalid."
+                    ),
+                )
+            )
 
             # -- Components check (Bifurcated: Core vs Third-Party) --
-            raw_comps = (sbom_data.get("components", []) if isinstance(sbom_data, dict) else [])
+            raw_comps = sbom_data.get("components", []) if isinstance(sbom_data, dict) else []
             if core_comps is None or tp_comps is None:
                 core_comps, tp_comps = self.partition_components(raw_comps)
 
-            core_missing: List[str] = []
+            core_missing: list[str] = []
             for c in core_comps:
                 c_name = c.get("name")
                 c_version = c.get("version")
@@ -1191,16 +1338,21 @@ class ExtendedSBOMValidator:
             invalid_c = total_c - valid_c
 
             if core_missing:
-                checks.append(ValidationCheck(
-                    name="Validazione componenti / Component Validation",
-                    category="component",
-                    passed=False,
-                    message=(
-                        f"Violazione requisiti minimi: {len(core_missing)} componenti Core mancano di campi obbligatori "
-                        f"({', '.join(core_missing[:5])}). Mandatory fields missing on core components."
-                    ),
-                    details={"core_missing": core_missing, "core_total": len(core_comps)},
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="Validazione componenti / Component Validation",
+                        category="component",
+                        passed=False,
+                        message=(
+                            f"Violazione requisiti minimi: {len(core_missing)} componenti Core mancano di campi obbligatori "
+                            f"({', '.join(core_missing[:5])}). Mandatory fields missing on core components."
+                        ),
+                        details={
+                            "core_missing": core_missing,
+                            "core_total": len(core_comps),
+                        },
+                    )
+                )
             else:
                 tp_missing_origin = []
                 if invalid_c > 0 and len(tp_comps) > 0:
@@ -1208,64 +1360,88 @@ class ExtendedSBOMValidator:
                         c.get("name") or f"Component #{i}"
                         for i, c in enumerate(tp_comps, 1)
                         if not (
-                            (c.get("supplier") and (isinstance(c.get("supplier"), dict) and c.get("supplier", {}).get("name") or isinstance(c.get("supplier"), str)))
+                            (
+                                c.get("supplier")
+                                and (
+                                    isinstance(c.get("supplier"), dict)
+                                    and c.get("supplier", {}).get("name")
+                                    or isinstance(c.get("supplier"), str)
+                                )
+                            )
                             or (c.get("author") and str(c.get("author")).strip())
-                            or (c.get("manufacturer") and (isinstance(c.get("manufacturer"), dict) and c.get("manufacturer", {}).get("name") or isinstance(c.get("manufacturer"), str)))
+                            or (
+                                c.get("manufacturer")
+                                and (
+                                    isinstance(c.get("manufacturer"), dict)
+                                    and c.get("manufacturer", {}).get("name")
+                                    or isinstance(c.get("manufacturer"), str)
+                                )
+                            )
                         )
                     ]
                 warning_note = ""
                 if invalid_c > 0 and len(tp_comps) > 0:
-                    warning_note = f" ({invalid_c} componenti terze parti privi di manufacturer aziendale; tollerato con avviso)"
+                    warning_note = (
+                        f" ({invalid_c} componenti terze parti privi di manufacturer aziendale; tollerato con avviso)"
+                    )
 
-                checks.append(ValidationCheck(
-                    name="Validazione componenti / Component Validation",
-                    category="component",
-                    passed=True,
-                    message=(
-                        f"Componenti Core conformi. {valid_c}/{total_c} componenti complessivi con campi minimi estesi{warning_note}."
-                    ),
-                    details={
-                        "total": total_c,
-                        "valid": valid_c,
-                        "invalid": invalid_c,
-                        "core_total": len(core_comps),
-                        "third_party_total": len(tp_comps),
-                        "warning": invalid_c > 0,
-                        "missing_items": tp_missing_origin if invalid_c > 0 else [],
-                        "warning_message": f"Component Validation: {invalid_c} third-party components lack enterprise manufacturer/origin metadata." if invalid_c > 0 else None,
-                    },
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="Validazione componenti / Component Validation",
+                        category="component",
+                        passed=True,
+                        message=(
+                            f"Componenti Core conformi. {valid_c}/{total_c} componenti complessivi con campi minimi estesi{warning_note}."
+                        ),
+                        details={
+                            "total": total_c,
+                            "valid": valid_c,
+                            "invalid": invalid_c,
+                            "core_total": len(core_comps),
+                            "third_party_total": len(tp_comps),
+                            "warning": invalid_c > 0,
+                            "missing_items": tp_missing_origin if invalid_c > 0 else [],
+                            "warning_message": f"Component Validation: {invalid_c} third-party components lack enterprise manufacturer/origin metadata."
+                            if invalid_c > 0
+                            else None,
+                        },
+                    )
+                )
 
             # -- Services check --
             total_s = acn_results.services_total
             valid_s = len(acn_results.valid_services)
             invalid_s = total_s - valid_s
             services_ok = (total_s == 0) or (invalid_s == 0)
-            checks.append(ValidationCheck(
-                name="Validazione servizi / Service Validation",
-                category="service",
-                passed=services_ok,
-                message=(
-                    f"{valid_s}/{total_s} servizi validi con campi minimi obbligatori. "
-                    f"{valid_s}/{total_s} services valid with required minimum fields."
-                    if total_s > 0 else
-                    "Nessun servizio trovato / No services found."
-                ),
-                details={
-                    "total": total_s,
-                    "valid": valid_s,
-                    "invalid": invalid_s,
-                },
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="Validazione servizi / Service Validation",
+                    category="service",
+                    passed=services_ok,
+                    message=(
+                        f"{valid_s}/{total_s} servizi validi con campi minimi obbligatori. "
+                        f"{valid_s}/{total_s} services valid with required minimum fields."
+                        if total_s > 0
+                        else "Nessun servizio trovato / No services found."
+                    ),
+                    details={
+                        "total": total_s,
+                        "valid": valid_s,
+                        "invalid": invalid_s,
+                    },
+                )
+            )
 
         except Exception as e:
-            checks.append(ValidationCheck(
-                name="Validazione ACN / ACN Validation",
-                category="acn",
-                passed=False,
-                message=f"Errore durante la validazione ACN / ACN validation error: {e}",
-                details={"error": str(e)},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="Validazione ACN / ACN Validation",
+                    category="acn",
+                    passed=False,
+                    message=f"Errore durante la validazione ACN / ACN validation error: {e}",
+                    details={"error": str(e)},
+                )
+            )
 
         return checks, output_lines, results_dict
 
@@ -1277,26 +1453,28 @@ class ExtendedSBOMValidator:
         self,
         data: dict,
         fmt: str,
-        core_comps: Optional[List[dict]] = None,
-        tp_comps: Optional[List[dict]] = None
-    ) -> List[ValidationCheck]:
+        core_comps: list[dict] | None = None,
+        tp_comps: list[dict] | None = None,
+    ) -> list[ValidationCheck]:
         """
         Controlli di conformità al Cyber Resilience Act (CRA).
         CRA Compliance Checks.
         """
-        checks: List[ValidationCheck] = []
+        checks: list[ValidationCheck] = []
 
         if fmt not in ("cyclonedx", "spdx"):
-            checks.append(ValidationCheck(
-                name="Conformità CRA / CRA Compliance",
-                category="cra",
-                passed=False,
-                message="Formato SBOM non riconosciuto — impossibile effettuare i controlli CRA. Unknown SBOM format.",
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="Conformità CRA / CRA Compliance",
+                    category="cra",
+                    passed=False,
+                    message="Formato SBOM non riconosciuto — impossibile effettuare i controlli CRA. Unknown SBOM format.",
+                )
+            )
             return checks
 
         if fmt == "cyclonedx":
-            components: List[dict] = data.get("components", [])
+            components: list[dict] = data.get("components", [])
             metadata: dict = data.get("metadata", {})
 
             if core_comps is None or tp_comps is None:
@@ -1352,7 +1530,7 @@ class ExtendedSBOMValidator:
         component = metadata.get("component")
 
         has_contact = False
-        details: Dict[str, Any] = {}
+        details: dict[str, Any] = {}
 
         if authors and isinstance(authors, list) and len(authors) > 0:
             has_contact = True
@@ -1361,10 +1539,7 @@ class ExtendedSBOMValidator:
             has_contact = True
             details["authors"] = [authors.get("name")]
 
-        if tools and (
-            (isinstance(tools, list) and len(tools) > 0)
-            or (isinstance(tools, dict) and len(tools) > 0)
-        ):
+        if tools and ((isinstance(tools, list) and len(tools) > 0) or (isinstance(tools, dict) and len(tools) > 0)):
             has_contact = True
             details["tools"] = tools
 
@@ -1426,9 +1601,9 @@ class ExtendedSBOMValidator:
 
     def _cra_check_sha512_hashes(
         self,
-        components: List[dict],
-        core_comps: Optional[List[dict]] = None,
-        tp_comps: Optional[List[dict]] = None
+        components: list[dict],
+        core_comps: list[dict] | None = None,
+        tp_comps: list[dict] | None = None,
     ) -> ValidationCheck:
         if not components:
             return ValidationCheck(
@@ -1443,14 +1618,18 @@ class ExtendedSBOMValidator:
                 category="cra",
                 passed=True,
                 message="Controllo hash SHA-512 ignorato per profilo LEGACY (sistemi air-gapped). Bypassed under LEGACY profile.",
-                details={"total": len(components), "bypassed": True, "profile": self.profile.value},
+                details={
+                    "total": len(components),
+                    "bypassed": True,
+                    "profile": self.profile.value,
+                },
             )
 
         if core_comps is None or tp_comps is None:
             core_comps, tp_comps = self.partition_components(components)
 
         # Strict check on Core components
-        core_missing: List[str] = []
+        core_missing: list[str] = []
         for comp in core_comps:
             hashes = comp.get("hashes")
             has = False
@@ -1458,7 +1637,9 @@ class ExtendedSBOMValidator:
                 for h in hashes:
                     if isinstance(h, dict):
                         alg = h.get("alg") or h.get("algorithm")
-                        if alg in HASH_SHA512_ALGS or (isinstance(alg, str) and alg.upper().replace("_", "-") in HASH_SHA512_ALGS):
+                        if alg in HASH_SHA512_ALGS or (
+                            isinstance(alg, str) and alg.upper().replace("_", "-") in HASH_SHA512_ALGS
+                        ):
                             if h.get("content") or h.get("hash"):
                                 has = True
                                 break
@@ -1483,7 +1664,7 @@ class ExtendedSBOMValidator:
 
         # Third-party components: missing hashes are downgraded to WARNING only
         tp_with_hash = 0
-        tp_missing: List[str] = []
+        tp_missing: list[str] = []
         for comp in tp_comps:
             hashes = comp.get("hashes")
             has = False
@@ -1491,7 +1672,9 @@ class ExtendedSBOMValidator:
                 for h in hashes:
                     if isinstance(h, dict):
                         alg = h.get("alg") or h.get("algorithm")
-                        if alg in HASH_ALGORITHMS or (isinstance(alg, str) and alg.upper().replace("_", "-") in HASH_ALGORITHMS):
+                        if alg in HASH_ALGORITHMS or (
+                            isinstance(alg, str) and alg.upper().replace("_", "-") in HASH_ALGORITHMS
+                        ):
                             if h.get("content") or h.get("hash"):
                                 has = True
                                 break
@@ -1503,7 +1686,9 @@ class ExtendedSBOMValidator:
         pct = (tp_with_hash / len(tp_comps) * 100) if tp_comps else 100.0
         warning_note = ""
         if tp_comps and tp_with_hash < len(tp_comps):
-            warning_note = f" (Avviso non bloccante: {len(tp_missing)} librerie di terze parti prive di hash crittografico)"
+            warning_note = (
+                f" (Avviso non bloccante: {len(tp_missing)} librerie di terze parti prive di hash crittografico)"
+            )
 
         return ValidationCheck(
             name="Hash SHA-512 componenti (CRA Art. 13) / SHA-512 Hashes",
@@ -1528,9 +1713,9 @@ class ExtendedSBOMValidator:
 
     def _cra_check_spdx_licenses(
         self,
-        components: List[dict],
-        core_comps: Optional[List[dict]] = None,
-        tp_comps: Optional[List[dict]] = None
+        components: list[dict],
+        core_comps: list[dict] | None = None,
+        tp_comps: list[dict] | None = None,
     ) -> ValidationCheck:
         if not components:
             return ValidationCheck(
@@ -1545,7 +1730,7 @@ class ExtendedSBOMValidator:
             core_comps, tp_comps = self.partition_components(components)
 
         # Strict check on Core components
-        core_invalid: List[str] = []
+        core_invalid: list[str] = []
         for comp in core_comps:
             licenses = comp.get("licenses")
             comp_name = comp.get("name", "sconosciuto")
@@ -1563,7 +1748,11 @@ class ExtendedSBOMValidator:
                             found_valid = True
                             break
                     else:
-                        if lic_id and (lic_id in VALID_SPDX_LICENSES or lic_id in ALLOWED_CORPORATE_LICENSE_REFS or (isinstance(lic_id, str) and lic_id.startswith("LicenseRef-"))):
+                        if lic_id and (
+                            lic_id in VALID_SPDX_LICENSES
+                            or lic_id in ALLOWED_CORPORATE_LICENSE_REFS
+                            or (isinstance(lic_id, str) and lic_id.startswith("LicenseRef-"))
+                        ):
                             found_valid = True
                             break
                         if lic_expr:
@@ -1591,7 +1780,7 @@ class ExtendedSBOMValidator:
 
         # Third-party components: sloppy or non-SPDX licenses generate WARNING only
         tp_with_strict = 0
-        tp_sloppy: List[str] = []
+        tp_sloppy: list[str] = []
         for comp in tp_comps:
             licenses = comp.get("licenses")
             comp_name = comp.get("name", "sconosciuto")
@@ -1603,7 +1792,11 @@ class ExtendedSBOMValidator:
                     lic = lic_entry.get("license")
                     lic_id = lic.get("id") if isinstance(lic, dict) else None
                     lic_expr = lic_entry.get("expression")
-                    if lic_id and (lic_id in VALID_SPDX_LICENSES or lic_id in ALLOWED_CORPORATE_LICENSE_REFS or (isinstance(lic_id, str) and lic_id.startswith("LicenseRef-"))):
+                    if lic_id and (
+                        lic_id in VALID_SPDX_LICENSES
+                        or lic_id in ALLOWED_CORPORATE_LICENSE_REFS
+                        or (isinstance(lic_id, str) and lic_id.startswith("LicenseRef-"))
+                    ):
                         is_strict = True
                         break
                     if lic_expr:
@@ -1616,7 +1809,9 @@ class ExtendedSBOMValidator:
 
         warning_note = ""
         if tp_sloppy:
-            warning_note = f" (Avviso non bloccante: {len(tp_sloppy)} librerie di terze parti con licenze non-SPDX o permissive)"
+            warning_note = (
+                f" (Avviso non bloccante: {len(tp_sloppy)} librerie di terze parti con licenze non-SPDX o permissive)"
+            )
 
         return ValidationCheck(
             name="Licenze SPDX valide (CRA Art. 13) / SPDX Licenses",
@@ -1670,8 +1865,8 @@ class ExtendedSBOMValidator:
             passed=passed,
             message=(
                 f"specVersion: {version} — Conforme (richiesto CycloneDX 1.6 o 1.7)."
-                if passed else
-                f"specVersion: {version} — Non conforme: richiesto CycloneDX 1.6 o 1.7."
+                if passed
+                else f"specVersion: {version} — Non conforme: richiesto CycloneDX 1.6 o 1.7."
             ),
             details={"version": version, "required": "1.6 o 1.7"},
         )
@@ -1698,14 +1893,14 @@ class ExtendedSBOMValidator:
         self,
         data: dict,
         fmt: str,
-        core_comps: Optional[List[dict]] = None,
-        tp_comps: Optional[List[dict]] = None
-    ) -> List[ValidationCheck]:
+        core_comps: list[dict] | None = None,
+        tp_comps: list[dict] | None = None,
+    ) -> list[ValidationCheck]:
         """
         Controlli di conformità alla Direttiva NIS2.
         NIS2 Compliance Checks.
         """
-        checks: List[ValidationCheck] = []
+        checks: list[ValidationCheck] = []
 
         if fmt == "cyclonedx":
             components = data.get("components", [])
@@ -1727,25 +1922,27 @@ class ExtendedSBOMValidator:
             checks.append(self._nis2_check_purl_traceability(components, core_comps=core_comps, tp_comps=tp_comps))
 
         else:
-            checks.append(ValidationCheck(
-                name="Conformità NIS2 / NIS2 Compliance",
-                category="nis2",
-                passed=True,
-                message=(
-                    f"Controlli NIS2 approfonditi disponibili solo per CycloneDX. "
-                    f"Formato: {fmt}. "
-                    "Full NIS2 checks available for CycloneDX format only."
-                ),
-                details={"skipped": True},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="Conformità NIS2 / NIS2 Compliance",
+                    category="nis2",
+                    passed=True,
+                    message=(
+                        f"Controlli NIS2 approfonditi disponibili solo per CycloneDX. "
+                        f"Formato: {fmt}. "
+                        "Full NIS2 checks available for CycloneDX format only."
+                    ),
+                    details={"skipped": True},
+                )
+            )
 
         return checks
 
     def _nis2_check_component_inventory(
         self,
-        components: List[dict],
-        core_comps: Optional[List[dict]] = None,
-        tp_comps: Optional[List[dict]] = None
+        components: list[dict],
+        core_comps: list[dict] | None = None,
+        tp_comps: list[dict] | None = None,
     ) -> ValidationCheck:
         if not components:
             return ValidationCheck(
@@ -1761,7 +1958,7 @@ class ExtendedSBOMValidator:
         if core_comps is None or tp_comps is None:
             core_comps, tp_comps = self.partition_components(components)
 
-        core_missing: List[str] = []
+        core_missing: list[str] = []
         for comp in core_comps:
             if not (comp.get("name") and comp.get("version")):
                 core_missing.append(comp.get("name", "sconosciuto"))
@@ -1798,11 +1995,13 @@ class ExtendedSBOMValidator:
                 "third_party_complete": tp_complete,
                 "missing_items": tp_missing_fields,
                 "warning": len(tp_missing_fields) > 0,
-                "warning_message": f"NIS2 Component Inventory: {len(tp_missing_fields)} third-party components missing name or version." if tp_missing_fields else None,
+                "warning_message": f"NIS2 Component Inventory: {len(tp_missing_fields)} third-party components missing name or version."
+                if tp_missing_fields
+                else None,
             },
         )
 
-    def _nis2_check_dependencies(self, components: List[dict], dependencies: List[dict]) -> ValidationCheck:
+    def _nis2_check_dependencies(self, components: list[dict], dependencies: list[dict]) -> ValidationCheck:
         """NIS2 Art. 21: supply chain — presenza sezione dipendenze."""
         if not components:
             return ValidationCheck(
@@ -1824,7 +2023,10 @@ class ExtendedSBOMValidator:
                     f"Sezione 'dependencies' presente con {deps_ref_count} voci. "
                     f"'dependencies' section present with {deps_ref_count} entries."
                 ),
-                details={"count": deps_ref_count, "components_with_purl": len(components_with_purl)},
+                details={
+                    "count": deps_ref_count,
+                    "components_with_purl": len(components_with_purl),
+                },
             )
         return ValidationCheck(
             name="Dipendenze supply chain NIS2 (Art. 21) / Supply Chain Dependencies",
@@ -1869,9 +2071,9 @@ class ExtendedSBOMValidator:
 
     def _nis2_check_purl_traceability(
         self,
-        components: List[dict],
-        core_comps: Optional[List[dict]] = None,
-        tp_comps: Optional[List[dict]] = None
+        components: list[dict],
+        core_comps: list[dict] | None = None,
+        tp_comps: list[dict] | None = None,
     ) -> ValidationCheck:
         """NIS2: tracciabilità supply chain tramite PURL."""
         if not components:
@@ -1887,7 +2089,11 @@ class ExtendedSBOMValidator:
                 category="nis2",
                 passed=True,
                 message="Controllo tracciabilità PURL ignorato per profilo LEGACY (sistemi air-gapped). Bypassed under LEGACY profile.",
-                details={"total": len(components), "bypassed": True, "profile": self.profile.value},
+                details={
+                    "total": len(components),
+                    "bypassed": True,
+                    "profile": self.profile.value,
+                },
             )
 
         if core_comps is None or tp_comps is None:
@@ -1903,7 +2109,10 @@ class ExtendedSBOMValidator:
                     f"Violazione NIS2: {len(core_missing_purl)} componenti Core privi di PURL "
                     f"({', '.join(core_missing_purl[:5])}). Supply chain traceability requires PURL for core components."
                 ),
-                details={"core_missing_purl": core_missing_purl, "core_total": len(core_comps)},
+                details={
+                    "core_missing_purl": core_missing_purl,
+                    "core_total": len(core_comps),
+                },
             )
 
         tp_with_purl = sum(1 for c in tp_comps if c.get("purl"))
@@ -1975,6 +2184,7 @@ class ExtendedSBOMValidator:
 # ---------------------------------------------------------------------------
 # ACN-only validator (for the dedicated ACN tab)
 # ---------------------------------------------------------------------------
+
 
 class AcnOnlyValidator:
     """
@@ -2048,10 +2258,12 @@ class AcnOnlyValidator:
 # Corporate Policy Validator ("Linee Guida per la generazione di una SBOM")
 # ---------------------------------------------------------------------------
 
-ALLOWED_CORPORATE_LICENSE_REFS = frozenset([
-    "LicenseRef-Proprietary",
-    "LicenseRef-InternalUseOnly",
-])
+ALLOWED_CORPORATE_LICENSE_REFS = frozenset(
+    [
+        "LicenseRef-Proprietary",
+        "LicenseRef-InternalUseOnly",
+    ]
+)
 
 
 class CorporatePolicyValidator:
@@ -2074,9 +2286,9 @@ class CorporatePolicyValidator:
 
     is_core_component = staticmethod(is_core_component)
 
-    def validate(self, sbom_json: dict) -> Dict[str, Any]:
-        failed_rules: List[str] = []
-        warnings: List[str] = []
+    def validate(self, sbom_json: dict) -> dict[str, Any]:
+        failed_rules: list[str] = []
+        warnings: list[str] = []
 
         if not isinstance(sbom_json, dict):
             return {
@@ -2108,9 +2320,7 @@ class CorporatePolicyValidator:
         # ------------------------------------------------------------------
         metadata = sbom_json.get("metadata")
         if not isinstance(metadata, dict):
-            failed_rules.append(
-                "Rule 2 [Document Metadata]: Root 'metadata' object is missing."
-            )
+            failed_rules.append("Rule 2 [Document Metadata]: Root 'metadata' object is missing.")
         else:
             # 2a. Timestamp check
             timestamp = metadata.get("timestamp")
@@ -2135,14 +2345,15 @@ class CorporatePolicyValidator:
             # 2b. Authors or Tools check
             authors = metadata.get("authors")
             tools = metadata.get("tools")
-            has_authors = bool(authors and (
-                (isinstance(authors, list) and len(authors) > 0)
-                or (isinstance(authors, dict) and len(authors) > 0)
-            ))
-            has_tools = bool(tools and (
-                (isinstance(tools, list) and len(tools) > 0)
-                or (isinstance(tools, dict) and len(tools) > 0)
-            ))
+            has_authors = bool(
+                authors
+                and (
+                    (isinstance(authors, list) and len(authors) > 0) or (isinstance(authors, dict) and len(authors) > 0)
+                )
+            )
+            has_tools = bool(
+                tools and ((isinstance(tools, list) and len(tools) > 0) or (isinstance(tools, dict) and len(tools) > 0))
+            )
 
             if not (has_authors or has_tools):
                 failed_rules.append(
@@ -2171,24 +2382,20 @@ class CorporatePolicyValidator:
         has_core_component = False
 
         if components is None or not isinstance(components, list):
-            failed_rules.append(
-                "Rule 3 [Component Mandatory Fields]: Root 'components' array is missing."
-            )
+            failed_rules.append("Rule 3 [Component Mandatory Fields]: Root 'components' array is missing.")
         elif len(components) == 0:
-            failed_rules.append(
-                "Rule 3 [Component Mandatory Fields]: Root 'components' list cannot be empty."
-            )
+            failed_rules.append("Rule 3 [Component Mandatory Fields]: Root 'components' list cannot be empty.")
         else:
             tp_missing_name_count = 0
-            tp_missing_name_samples: List[str] = []
+            tp_missing_name_samples: list[str] = []
             tp_missing_version_count = 0
-            tp_missing_version_samples: List[str] = []
+            tp_missing_version_samples: list[str] = []
             tp_missing_origin_count = 0
-            tp_missing_origin_samples: List[str] = []
+            tp_missing_origin_samples: list[str] = []
             tp_missing_hash_count = 0
-            tp_missing_hash_samples: List[str] = []
+            tp_missing_hash_samples: list[str] = []
             tp_invalid_lic_count = 0
-            tp_invalid_lic_samples: List[str] = []
+            tp_invalid_lic_samples: list[str] = []
 
             for idx, comp in enumerate(components, 1):
                 if not isinstance(comp, dict):
@@ -2257,7 +2464,9 @@ class CorporatePolicyValidator:
                     for h in hashes:
                         if isinstance(h, dict):
                             alg = h.get("alg") or h.get("algorithm")
-                            if alg in HASH_ALGORITHMS or (isinstance(alg, str) and alg.upper().replace("_", "-") in HASH_ALGORITHMS):
+                            if alg in HASH_ALGORITHMS or (
+                                isinstance(alg, str) and alg.upper().replace("_", "-") in HASH_ALGORITHMS
+                            ):
                                 val = h.get("content") or h.get("hash")
                                 if val and str(val).strip():
                                     has_valid_hash = True
@@ -2309,7 +2518,11 @@ class CorporatePolicyValidator:
                                     break
                                 else:
                                     if is_core:
-                                        display_name = str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                                        display_name = (
+                                            str(comp_name)
+                                            if comp_name and str(comp_name).strip()
+                                            else f"Component #{idx}"
+                                        )
                                         failed_rules.append(
                                             f"Rule 4 [License Compliance]: Core component '{display_name}' has unrecognized license ID '{clean_id}'. "
                                             f"Must be a valid SPDX identifier or one of {sorted(ALLOWED_CORPORATE_LICENSE_REFS)}."
@@ -2321,14 +2534,20 @@ class CorporatePolicyValidator:
                                     break
                                 else:
                                     if is_core:
-                                        display_name = str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                                        display_name = (
+                                            str(comp_name)
+                                            if comp_name and str(comp_name).strip()
+                                            else f"Component #{idx}"
+                                        )
                                         failed_rules.append(
                                             f"Rule 4 [License Compliance]: Core component '{display_name}' uses unstructured license name '{clean_name}'. "
                                             "Unstructured license names are rejected for core components."
                                         )
                             else:
                                 if is_core:
-                                    display_name = str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                                    display_name = (
+                                        str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                                    )
                                     failed_rules.append(
                                         f"Rule 4 [License Compliance]: Core component '{display_name}' license object is empty (missing 'id')."
                                     )
@@ -2340,7 +2559,8 @@ class CorporatePolicyValidator:
                                 break
                             tokens = EXPR_TOKEN_REGEX.findall(clean_expr)
                             invalid_tokens = [
-                                t for t in tokens
+                                t
+                                for t in tokens
                                 if t not in VALID_SPDX_LICENSES
                                 and t not in ALLOWED_CORPORATE_LICENSE_REFS
                                 and t not in ("AND", "OR", "WITH")
@@ -2350,13 +2570,17 @@ class CorporatePolicyValidator:
                                 break
                             else:
                                 if is_core:
-                                    display_name = str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                                    display_name = (
+                                        str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                                    )
                                     failed_rules.append(
                                         f"Rule 4 [License Compliance]: Core component '{display_name}' has invalid license expression tokens: {invalid_tokens}."
                                     )
                         else:
                             if is_core:
-                                display_name = str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                                display_name = (
+                                    str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                                )
                                 failed_rules.append(
                                     f"Rule 4 [License Compliance]: Core component '{display_name}' license entry #{lic_idx} must specify 'license.id' or 'expression'."
                                 )
@@ -2364,7 +2588,9 @@ class CorporatePolicyValidator:
                     if not found_valid_license and not is_core:
                         tp_invalid_lic_count += 1
                         if len(tp_invalid_lic_samples) < 5:
-                            display_name = str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                            display_name = (
+                                str(comp_name) if comp_name and str(comp_name).strip() else f"Component #{idx}"
+                            )
                             tp_invalid_lic_samples.append(display_name)
 
             # Summarize third-party warnings
@@ -2423,7 +2649,7 @@ class CorporatePolicyValidator:
         }
 
 
-def validate_corporate_policy(sbom_json: dict) -> Dict[str, Any]:
+def validate_corporate_policy(sbom_json: dict) -> dict[str, Any]:
     """
     Validates an SBOM dictionary against the official Corporate Policy
     ('Linee Guida per la generazione di una SBOM').
@@ -2433,4 +2659,3 @@ def validate_corporate_policy(sbom_json: dict) -> Dict[str, Any]:
     """
     validator = CorporatePolicyValidator()
     return validator.validate(sbom_json)
-

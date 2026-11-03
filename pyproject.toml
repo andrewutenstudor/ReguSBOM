@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # Line too long
+    "E402",  # Module level import not at top of file
+    "E722",  # Bare except
+    "E712",  # Comparison to True/False (needed for SQLAlchemy boolean expressions)
+    "F401",  # Unused imports in re-exports and optional vendor fallbacks
+    "F841",  # Local variable assigned but unused
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "cli"]

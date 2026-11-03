@@ -3,11 +3,12 @@ ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
 SMTP Mailer Service for Self-Service Password Resets and Regulatory Alerts.
 Zero external dependencies: uses standard library smtplib and email.mime.
 """
+
+import logging
 import os
 import smtplib
-import logging
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 logger = logging.getLogger("regubom.mail")
 

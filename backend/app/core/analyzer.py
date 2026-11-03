@@ -6,15 +6,13 @@ flagging missing desirable fields (supplier, version, licenses, hashes, purl, cp
 and producing a structured payload for interactive frontend exploration.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from app.core.validator import (
-    is_core_component,
-    is_spdx_license,
     has_non_spdx_license,
+    is_core_component,
     is_in_dependencies_graph,
-    HASH_ALGORITHMS,
-    VALID_SPDX_LICENSES,
-    ALLOWED_CORPORATE_LICENSE_REFS,
+    is_spdx_license,
 )
 
 DESIRABLE_METADATA_FIELDS = [
@@ -73,13 +71,13 @@ def _extract_supplier_display(comp: dict) -> str:
     return "—"
 
 
-def _extract_licenses_display(comp: dict) -> List[str]:
+def _extract_licenses_display(comp: dict) -> list[str]:
     """Extracts a clean list of license identifiers or expressions."""
     licenses = comp.get("licenses")
     if not isinstance(licenses, list) or not licenses:
         return []
 
-    result: List[str] = []
+    result: list[str] = []
     for lic in licenses:
         if not isinstance(lic, dict):
             continue
@@ -103,13 +101,13 @@ def _extract_licenses_display(comp: dict) -> List[str]:
     return result
 
 
-def _extract_tools_display(metadata: dict) -> List[str]:
+def _extract_tools_display(metadata: dict) -> list[str]:
     """Extracts tool names from metadata.tools."""
     tools = metadata.get("tools")
     if not tools:
         return []
 
-    names: List[str] = []
+    names: list[str] = []
     if isinstance(tools, list):
         for t in tools:
             if isinstance(t, dict):
@@ -137,12 +135,12 @@ def _extract_tools_display(metadata: dict) -> List[str]:
     return names
 
 
-def _extract_authors_display(metadata: dict) -> List[str]:
+def _extract_authors_display(metadata: dict) -> list[str]:
     """Extracts author names from metadata.authors."""
     authors = metadata.get("authors")
     if not isinstance(authors, list):
         return []
-    result: List[str] = []
+    result: list[str] = []
     for a in authors:
         if isinstance(a, dict):
             n = a.get("name")
@@ -154,7 +152,7 @@ def _extract_authors_display(metadata: dict) -> List[str]:
     return result
 
 
-def analyze_component(comp: dict, index: int = 0, dep_refs: Optional[set] = None) -> Dict[str, Any]:
+def analyze_component(comp: dict, index: int = 0, dep_refs: set | None = None) -> dict[str, Any]:
     """
     Analyzes a single component strictly evaluating corporate policy mandates:
     - Name
@@ -213,7 +211,7 @@ def analyze_component(comp: dict, index: int = 0, dep_refs: Optional[set] = None
     has_id_symbol = "✓" if has_id_bool else "✕"
 
     # Calculate missing desirable fields
-    missing_desirable: List[str] = []
+    missing_desirable: list[str] = []
     if not has_supplier:
         missing_desirable.append("supplier")
     if not has_version:
@@ -229,15 +227,16 @@ def analyze_component(comp: dict, index: int = 0, dep_refs: Optional[set] = None
 
     completeness_score = round(
         ((len(DESIRABLE_METADATA_FIELDS) - len(missing_desirable)) / len(DESIRABLE_METADATA_FIELDS)) * 100,
-        1
+        1,
     )
 
     c_bom_ref = comp.get("bom-ref") or comp.get("ref")
     in_dep_graph = bool(
-        dep_refs and (
-            (c_bom_ref and str(c_bom_ref) in dep_refs) or
-            (purl and str(purl) in dep_refs) or
-            (name and str(name) in dep_refs)
+        dep_refs
+        and (
+            (c_bom_ref and str(c_bom_ref) in dep_refs)
+            or (purl and str(purl) in dep_refs)
+            or (name and str(name) in dep_refs)
         )
     )
     has_dependencies_symbol = "✓" if in_dep_graph else "✕"
@@ -276,7 +275,7 @@ def analyze_component(comp: dict, index: int = 0, dep_refs: Optional[set] = None
     }
 
 
-def analyze_sbom(sbom_dict: Dict[str, Any]) -> Dict[str, Any]:
+def analyze_sbom(sbom_dict: dict[str, Any]) -> dict[str, Any]:
     """
     Parses an SBOM dictionary and returns an enriched payload mapping out
     root metadata, mapped components with desirable gap indicators, and aggregate statistics.
@@ -284,7 +283,10 @@ def analyze_sbom(sbom_dict: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(sbom_dict, dict):
         sbom_dict = {}
 
-    bom_format = sbom_dict.get("bomFormat", "CycloneDX" if "bomFormat" in sbom_dict else "SPDX" if "spdxVersion" in sbom_dict else "Unknown")
+    bom_format = sbom_dict.get(
+        "bomFormat",
+        "CycloneDX" if "bomFormat" in sbom_dict else "SPDX" if "spdxVersion" in sbom_dict else "Unknown",
+    )
     spec_version = str(sbom_dict.get("specVersion") or sbom_dict.get("spdxVersion") or "1.6").strip()
     serial_number = sbom_dict.get("serialNumber") or sbom_dict.get("serial_number") or "—"
     doc_version = sbom_dict.get("version", 1)
@@ -340,7 +342,7 @@ def analyze_sbom(sbom_dict: Dict[str, Any]) -> Dict[str, Any]:
                 if child:
                     dep_refs.add(str(child))
 
-    components: List[Dict[str, Any]] = []
+    components: list[dict[str, Any]] = []
     field_gap_counts = {field: 0 for field in DESIRABLE_METADATA_FIELDS}
     core_count = 0
     third_party_count = 0
@@ -367,9 +369,7 @@ def analyze_sbom(sbom_dict: Dict[str, Any]) -> Dict[str, Any]:
                 field_gap_counts[m] += 1
 
     total_components = len(components)
-    completeness_percentage = round(
-        (complete_count / total_components * 100), 1
-    ) if total_components > 0 else 100.0
+    completeness_percentage = round((complete_count / total_components * 100), 1) if total_components > 0 else 100.0
 
     field_coverage_percentages = {
         field: round(((total_components - gap_cnt) / total_components * 100), 1) if total_components > 0 else 100.0
@@ -394,7 +394,14 @@ def analyze_sbom(sbom_dict: Dict[str, Any]) -> Dict[str, Any]:
             "name": comp.get("name", "N/D"),
             "version": comp.get("version") or "vN/D",
             "has_version": "✓" if bool(comp.get("version")) else "✕",
-            "is_core": bool(any(isinstance(p, dict) and p.get("name") == "company:core-component" and str(p.get("value")).lower() == "true" for p in (comp.get("properties") if isinstance(comp.get("properties"), list) else []))),
+            "is_core": bool(
+                any(
+                    isinstance(p, dict)
+                    and p.get("name") == "company:core-component"
+                    and str(p.get("value")).lower() == "true"
+                    for p in (comp.get("properties") if isinstance(comp.get("properties"), list) else [])
+                )
+            ),
             "has_id": "✓" if bool(comp.get("purl") or comp.get("cpe")) else "✕",
             "has_supplier": "✓" if bool(comp.get("supplier") or comp.get("author") or comp.get("publisher")) else "✕",
             "has_hash": "✓" if bool(comp.get("hashes") and len(comp.get("hashes")) > 0) else "✕",

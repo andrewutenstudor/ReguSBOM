@@ -3,23 +3,23 @@ ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
 JWT Token Management & PBKDF2 Cryptographic Password Hashing.
 FastAPI Dependency injection for RBAC user authentication.
 """
+
 import base64
 import hashlib
 import hmac
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.database import get_db
 from app.core.auth.roles import Role
+from app.core.database import get_db
 from app.models.user import User
 
 logger = logging.getLogger("regubom.auth.jwt")
@@ -62,20 +62,22 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # ---------------------------------------------------------------------------
 # JWT Token Generation & Decoding
 # ---------------------------------------------------------------------------
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Creates a signed JWT bearer token containing user claims and role."""
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
-    to_encode.update({
-        "exp": expire,
-        "iat": now,
-        "iss": "ReguBOM Gateway",
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "iat": now,
+            "iss": "ReguBOM Gateway",
+        }
+    )
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
+def decode_access_token(token: str) -> dict[str, Any] | None:
     """Decodes and validates JWT bearer token."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -88,8 +90,8 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
 # FastAPI Auth Dependencies
 # ---------------------------------------------------------------------------
 async def get_current_user(
-    auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
-    db: Session = Depends(get_db)
+    auth: HTTPAuthorizationCredentials | None = Depends(security_bearer),
+    db: Session = Depends(get_db),
 ) -> User:
     """Dependency extracting current authenticated user from Bearer JWT token."""
     credentials_exception = HTTPException(
@@ -120,7 +122,7 @@ async def get_current_user(
                 role=payload.get("role", Role.DEVELOPER),
                 is_ldap_user=True,
                 is_active=True,
-                created_at=datetime.utcnow()
+                created_at=datetime.utcnow(),
             )
             db.add(user)
             db.commit()
@@ -131,7 +133,9 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+async def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
     """Ensures current user is active."""
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user account.")
@@ -147,10 +151,34 @@ def seed_default_users(db: Session) -> None:
     if user_count == 0:
         logger.info("[Auth] Initializing default enterprise RBAC user accounts...")
         defaults = [
-            ("admin", "admin@regubom.internal", "ReguBOM@Admin2026!", Role.ADMIN, "System Administrator"),
-            ("relmanager", "release@regubom.internal", "ReguBOM@Release2026!", Role.RELEASE_MANAGER, "Release & Compliance Manager"),
-            ("developer", "dev@regubom.internal", "ReguBOM@Dev2026!", Role.DEVELOPER, "Software Engineer"),
-            ("auditor", "audit@regubom.internal", "ReguBOM@Audit2026!", Role.AUDITOR, "Regulatory Compliance Auditor"),
+            (
+                "admin",
+                "admin@regubom.internal",
+                "ReguBOM@Admin2026!",
+                Role.ADMIN,
+                "System Administrator",
+            ),
+            (
+                "relmanager",
+                "release@regubom.internal",
+                "ReguBOM@Release2026!",
+                Role.RELEASE_MANAGER,
+                "Release & Compliance Manager",
+            ),
+            (
+                "developer",
+                "dev@regubom.internal",
+                "ReguBOM@Dev2026!",
+                Role.DEVELOPER,
+                "Software Engineer",
+            ),
+            (
+                "auditor",
+                "audit@regubom.internal",
+                "ReguBOM@Audit2026!",
+                Role.AUDITOR,
+                "Regulatory Compliance Auditor",
+            ),
         ]
         for uname, email, pwd, role, fullname in defaults:
             user = User(
@@ -161,7 +189,7 @@ def seed_default_users(db: Session) -> None:
                 full_name=fullname,
                 is_active=True,
                 is_ldap_user=False,
-                created_at=datetime.utcnow()
+                created_at=datetime.utcnow(),
             )
             db.add(user)
         db.commit()

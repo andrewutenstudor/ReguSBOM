@@ -4,24 +4,23 @@ Immutable Audit Logging Middleware.
 Captures all mutating requests (POST, PUT, DELETE, PATCH) into the audit_logs table.
 Compliant with EU Cyber Resilience Act (CRA Art. 13 & Annex II) traceability requirements.
 """
+
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
 
-from app.core.database import SessionLocal
 from app.core.auth.jwt_handler import decode_access_token
+from app.core.database import SessionLocal
 from app.models.audit import AuditLog
 
 logger = logging.getLogger("regubom.audit")
 
 
-def _determine_audit_action(method: str, path: str) -> tuple[str, str, Optional[str]]:
+def _determine_audit_action(method: str, path: str) -> tuple[str, str, str | None]:
     """Derives action name, resource type, and resource id from request method and path."""
     clean_path = path.strip("/").split("/")
     # default action and resource
@@ -115,7 +114,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
                     "status_code": response.status_code,
                     "duration_ms": elapsed_ms,
                     "user_agent": request.headers.get("user-agent", "N/D")[:150],
-                }
+                },
             )
         )
 
@@ -126,9 +125,9 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
         user_id: str,
         action: str,
         resource_type: str,
-        resource_id: Optional[str],
+        resource_id: str | None,
         ip_address: str,
-        details: dict
+        details: dict,
     ):
         """Persists audit record in a dedicated database session."""
         try:
@@ -141,7 +140,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
                     resource_type=resource_type,
                     resource_id=resource_id,
                     ip_address=ip_address,
-                    details=details
+                    details=details,
                 )
                 db.add(log_entry)
                 db.commit()

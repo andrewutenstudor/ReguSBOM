@@ -3,12 +3,15 @@ ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
 Security Utilities: Sliding Window In-Memory Rate Limiting and Audit Event Recording.
 Compliant with ENISA Table 7 and NIS2 Art. 21 Access Hardening.
 """
-import time
+
 import logging
+import time
 from collections import defaultdict, deque
-from typing import Optional, Dict, Any
-from fastapi import Request, HTTPException, status
+from typing import Any
+
+from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
+
 from app.models.audit import AuditLog
 
 logger = logging.getLogger("regubom.security")
@@ -22,15 +25,9 @@ class InMemoryRateLimiter:
 
     def __init__(self):
         # Maps (ip, action) -> deque of timestamps
-        self._history: Dict[tuple, deque] = defaultdict(deque)
+        self._history: dict[tuple, deque] = defaultdict(deque)
 
-    def check(
-        self,
-        ip: str,
-        action: str,
-        max_attempts: int,
-        window_seconds: int
-    ) -> bool:
+    def check(self, ip: str, action: str, max_attempts: int, window_seconds: int) -> bool:
         """
         Records attempt and checks if within limits.
         Returns True if allowed, False if exceeded.
@@ -54,12 +51,7 @@ class InMemoryRateLimiter:
 rate_limiter = InMemoryRateLimiter()
 
 
-def enforce_rate_limit(
-    request: Request,
-    action: str,
-    max_attempts: int,
-    window_seconds: int
-):
+def enforce_rate_limit(request: Request, action: str, max_attempts: int, window_seconds: int):
     """
     FastAPI helper raising HTTP 429 when rate limit is exceeded.
     Extracts client IP from X-Forwarded-For or client.host.
@@ -84,12 +76,12 @@ def enforce_rate_limit(
 def record_audit_event(
     db: Session,
     action: str,
-    user_id: Optional[str] = None,
-    ip_address: Optional[str] = None,
+    user_id: str | None = None,
+    ip_address: str | None = None,
     resource_type: str = "AUTH",
-    resource_id: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-) -> Optional[AuditLog]:
+    resource_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> AuditLog | None:
     """
     Records an immutable audit event in the database for compliance and non-repudiation.
     """

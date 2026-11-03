@@ -8,13 +8,14 @@ Computes deep semantic differences between two SBOM documents:
 - Executive compliance and security posture delta
 Supports CycloneDX (1.4-1.7) and SPDX (2.3-3.0.1).
 """
+
 import logging
-from typing import Dict, Any, List, Set, Tuple, Optional
+from typing import Any
 
 logger = logging.getLogger("regubom.diff")
 
 
-def _extract_component_dict(comp: Dict[str, Any]) -> Dict[str, Any]:
+def _extract_component_dict(comp: dict[str, Any]) -> dict[str, Any]:
     """Normalizes a raw CycloneDX or SPDX component into a canonical structure."""
     name = str(comp.get("name") or comp.get("packageName") or "N/D").strip()
     version = str(comp.get("version") or comp.get("versionInfo") or comp.get("packageVersion") or "N/D").strip()
@@ -40,7 +41,7 @@ def _extract_component_dict(comp: Dict[str, Any]) -> Dict[str, Any]:
         supplier_display = supplier_raw.replace("Organization:", "").replace("Person:", "").strip()
 
     # License extraction
-    licenses_found: List[str] = []
+    licenses_found: list[str] = []
     if "licenses" in comp and isinstance(comp["licenses"], list):
         for lic_entry in comp["licenses"]:
             if isinstance(lic_entry, dict):
@@ -61,7 +62,7 @@ def _extract_component_dict(comp: Dict[str, Any]) -> Dict[str, Any]:
     license_display = ", ".join(licenses_found) if licenses_found else "N/D"
 
     # Hashes extraction
-    hashes_map: Dict[str, str] = {}
+    hashes_map: dict[str, str] = {}
     if "hashes" in comp and isinstance(comp["hashes"], list):
         for h in comp["hashes"]:
             if isinstance(h, dict) and h.get("alg") and h.get("content"):
@@ -72,8 +73,7 @@ def _extract_component_dict(comp: Dict[str, Any]) -> Dict[str, Any]:
                 hashes_map[str(c["algorithm"]).upper()] = str(c["checksumValue"]).strip()
 
     has_strong_hash = bool(
-        "SHA-256" in hashes_map or "SHA256" in hashes_map or
-        "SHA-512" in hashes_map or "SHA512" in hashes_map
+        "SHA-256" in hashes_map or "SHA256" in hashes_map or "SHA-512" in hashes_map or "SHA512" in hashes_map
     )
 
     bom_ref = str(comp.get("bom-ref") or comp.get("SPDXID") or purl_str or f"{name}@{version}").strip()
@@ -92,21 +92,24 @@ def _extract_component_dict(comp: Dict[str, Any]) -> Dict[str, Any]:
         "type": str(comp.get("type") or comp.get("primaryPackagePurpose") or "library").strip(),
         "is_proprietary": bool(
             any(
-                str(p.get("name", "")).startswith("regubom:proprietary") or
-                str(p.get("name", "")).startswith("company:core-component")
+                str(p.get("name", "")).startswith("regubom:proprietary")
+                or str(p.get("name", "")).startswith("company:core-component")
                 for p in comp.get("properties", [])
                 if isinstance(p, dict)
             )
-        ) if isinstance(comp.get("properties"), list) else False
+        )
+        if isinstance(comp.get("properties"), list)
+        else False,
     }
 
 
-def _extract_all_components(sbom_dict: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _extract_all_components(sbom_dict: dict[str, Any]) -> list[dict[str, Any]]:
     """Extracts all components from CycloneDX or SPDX."""
-    raw_list: List[Dict[str, Any]] = []
+    raw_list: list[dict[str, Any]] = []
 
     # CycloneDX
     if "components" in sbom_dict and isinstance(sbom_dict["components"], list):
+
         def _recurse_cdx(comps):
             for c in comps:
                 if isinstance(c, dict):
@@ -114,6 +117,7 @@ def _extract_all_components(sbom_dict: Dict[str, Any]) -> List[Dict[str, Any]]:
                     sub = c.get("components")
                     if isinstance(sub, list):
                         _recurse_cdx(sub)
+
         _recurse_cdx(sbom_dict["components"])
 
     # SPDX packages
@@ -125,9 +129,9 @@ def _extract_all_components(sbom_dict: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [_extract_component_dict(c) for c in raw_list]
 
 
-def _extract_dependency_edges(sbom_dict: Dict[str, Any]) -> Set[Tuple[str, str]]:
+def _extract_dependency_edges(sbom_dict: dict[str, Any]) -> set[tuple[str, str]]:
     """Extracts dependency graph directed edges: set of (source_ref, target_ref)."""
-    edges: Set[Tuple[str, str]] = set()
+    edges: set[tuple[str, str]] = set()
 
     # CycloneDX dependencies
     if "dependencies" in sbom_dict and isinstance(sbom_dict["dependencies"], list):
@@ -154,7 +158,7 @@ def _extract_dependency_edges(sbom_dict: Dict[str, Any]) -> Set[Tuple[str, str]]
     return edges
 
 
-def compare_sboms(base_sbom_dict: Dict[str, Any], target_sbom_dict: Dict[str, Any]) -> Dict[str, Any]:
+def compare_sboms(base_sbom_dict: dict[str, Any], target_sbom_dict: dict[str, Any]) -> dict[str, Any]:
     """
     Executes a comprehensive semantic differential between base and target SBOMs.
     Returns:
@@ -168,28 +172,28 @@ def compare_sboms(base_sbom_dict: Dict[str, Any], target_sbom_dict: Dict[str, An
     target_components = _extract_all_components(target_sbom_dict)
 
     # Build index by component name for version/attribute drift tracking
-    base_by_name: Dict[str, List[Dict[str, Any]]] = {}
+    base_by_name: dict[str, list[dict[str, Any]]] = {}
     for c in base_components:
         base_by_name.setdefault(c["name"].lower(), []).append(c)
 
-    target_by_name: Dict[str, List[Dict[str, Any]]] = {}
+    target_by_name: dict[str, list[dict[str, Any]]] = {}
     for c in target_components:
         target_by_name.setdefault(c["name"].lower(), []).append(c)
 
     # Exact identity index by (name.lower(), version)
-    base_by_identity: Dict[Tuple[str, str], Dict[str, Any]] = {
+    base_by_identity: dict[tuple[str, str], dict[str, Any]] = {
         (c["name"].lower(), c["version"]): c for c in base_components
     }
-    target_by_identity: Dict[Tuple[str, str], Dict[str, Any]] = {
+    target_by_identity: dict[tuple[str, str], dict[str, Any]] = {
         (c["name"].lower(), c["version"]): c for c in target_components
     }
 
-    added_components: List[Dict[str, Any]] = []
-    removed_components: List[Dict[str, Any]] = []
-    modified_components: List[Dict[str, Any]] = []
+    added_components: list[dict[str, Any]] = []
+    removed_components: list[dict[str, Any]] = []
+    modified_components: list[dict[str, Any]] = []
 
-    matched_target_identities: Set[Tuple[str, str]] = set()
-    matched_base_identities: Set[Tuple[str, str]] = set()
+    matched_target_identities: set[tuple[str, str]] = set()
+    matched_base_identities: set[tuple[str, str]] = set()
 
     # 1. Detect Library Name Matches (Check for Version & Attribute Drift)
     all_names = set(base_by_name.keys()).union(set(target_by_name.keys()))
@@ -216,21 +220,15 @@ def compare_sboms(base_sbom_dict: Dict[str, Any], target_sbom_dict: Dict[str, An
             version_changed = b_comp["version"] != t_comp["version"]
             license_changed = b_comp["license_display"] != t_comp["license_display"]
             supplier_changed = (
-                b_comp["supplier"] != "N/D" and
-                t_comp["supplier"] != "N/D" and
-                b_comp["supplier"].lower() != t_comp["supplier"].lower()
+                b_comp["supplier"] != "N/D"
+                and t_comp["supplier"] != "N/D"
+                and b_comp["supplier"].lower() != t_comp["supplier"].lower()
             )
             # Hash drop: base had strong hash, target dropped it!
             hash_dropped = b_comp["has_strong_hash"] and not t_comp["has_strong_hash"]
             hash_added = not b_comp["has_strong_hash"] and t_comp["has_strong_hash"]
 
-            has_drift = (
-                version_changed or
-                license_changed or
-                supplier_changed or
-                hash_dropped or
-                hash_added
-            )
+            has_drift = version_changed or license_changed or supplier_changed or hash_dropped or hash_added
 
             if has_drift:
                 if version_changed:
@@ -242,84 +240,94 @@ def compare_sboms(base_sbom_dict: Dict[str, Any], target_sbom_dict: Dict[str, An
                 if supplier_changed:
                     supplier_drift_count += 1
 
-                modified_components.append({
-                    "name": t_comp["name"],
-                    "drift_type": "MODIFIED",
-                    "base": {
-                        "version": b_comp["version"],
-                        "license": b_comp["license_display"],
-                        "supplier": b_comp["supplier"],
-                        "has_strong_hash": b_comp["has_strong_hash"],
-                        "purl": b_comp["purl"],
-                    },
-                    "target": {
-                        "version": t_comp["version"],
-                        "license": t_comp["license_display"],
-                        "supplier": t_comp["supplier"],
-                        "has_strong_hash": t_comp["has_strong_hash"],
-                        "purl": t_comp["purl"],
-                    },
-                    "drift": {
-                        "version_changed": version_changed,
-                        "license_changed": license_changed,
-                        "supplier_changed": supplier_changed,
-                        "hash_dropped": hash_dropped,
-                        "hash_added": hash_added,
+                modified_components.append(
+                    {
+                        "name": t_comp["name"],
+                        "drift_type": "MODIFIED",
+                        "base": {
+                            "version": b_comp["version"],
+                            "license": b_comp["license_display"],
+                            "supplier": b_comp["supplier"],
+                            "has_strong_hash": b_comp["has_strong_hash"],
+                            "purl": b_comp["purl"],
+                        },
+                        "target": {
+                            "version": t_comp["version"],
+                            "license": t_comp["license_display"],
+                            "supplier": t_comp["supplier"],
+                            "has_strong_hash": t_comp["has_strong_hash"],
+                            "purl": t_comp["purl"],
+                        },
+                        "drift": {
+                            "version_changed": version_changed,
+                            "license_changed": license_changed,
+                            "supplier_changed": supplier_changed,
+                            "hash_dropped": hash_dropped,
+                            "hash_added": hash_added,
+                        },
                     }
-                })
+                )
 
         # Scenario B: Library only in target -> ADDED
         elif target_matches and not base_matches:
             for t_comp in target_matches:
                 matched_target_identities.add((t_comp["name"].lower(), t_comp["version"]))
-                added_components.append({
-                    "name": t_comp["name"],
-                    "version": t_comp["version"],
-                    "license": t_comp["license_display"],
-                    "supplier": t_comp["supplier"],
-                    "purl": t_comp["purl"],
-                    "has_strong_hash": t_comp["has_strong_hash"],
-                    "drift_type": "ADDED",
-                })
+                added_components.append(
+                    {
+                        "name": t_comp["name"],
+                        "version": t_comp["version"],
+                        "license": t_comp["license_display"],
+                        "supplier": t_comp["supplier"],
+                        "purl": t_comp["purl"],
+                        "has_strong_hash": t_comp["has_strong_hash"],
+                        "drift_type": "ADDED",
+                    }
+                )
 
         # Scenario C: Library only in base -> REMOVED
         elif base_matches and not target_matches:
             for b_comp in base_matches:
                 matched_base_identities.add((b_comp["name"].lower(), b_comp["version"]))
-                removed_components.append({
-                    "name": b_comp["name"],
-                    "version": b_comp["version"],
-                    "license": b_comp["license_display"],
-                    "supplier": b_comp["supplier"],
-                    "purl": b_comp["purl"],
-                    "has_strong_hash": b_comp["has_strong_hash"],
-                    "drift_type": "REMOVED",
-                })
+                removed_components.append(
+                    {
+                        "name": b_comp["name"],
+                        "version": b_comp["version"],
+                        "license": b_comp["license_display"],
+                        "supplier": b_comp["supplier"],
+                        "purl": b_comp["purl"],
+                        "has_strong_hash": b_comp["has_strong_hash"],
+                        "drift_type": "REMOVED",
+                    }
+                )
 
     # Catch any remaining unmatched items
     for ident, comp in target_by_identity.items():
         if ident not in matched_target_identities:
-            added_components.append({
-                "name": comp["name"],
-                "version": comp["version"],
-                "license": comp["license_display"],
-                "supplier": comp["supplier"],
-                "purl": comp["purl"],
-                "has_strong_hash": comp["has_strong_hash"],
-                "drift_type": "ADDED",
-            })
+            added_components.append(
+                {
+                    "name": comp["name"],
+                    "version": comp["version"],
+                    "license": comp["license_display"],
+                    "supplier": comp["supplier"],
+                    "purl": comp["purl"],
+                    "has_strong_hash": comp["has_strong_hash"],
+                    "drift_type": "ADDED",
+                }
+            )
 
     for ident, comp in base_by_identity.items():
         if ident not in matched_base_identities:
-            removed_components.append({
-                "name": comp["name"],
-                "version": comp["version"],
-                "license": comp["license_display"],
-                "supplier": comp["supplier"],
-                "purl": comp["purl"],
-                "has_strong_hash": comp["has_strong_hash"],
-                "drift_type": "REMOVED",
-            })
+            removed_components.append(
+                {
+                    "name": comp["name"],
+                    "version": comp["version"],
+                    "license": comp["license_display"],
+                    "supplier": comp["supplier"],
+                    "purl": comp["purl"],
+                    "has_strong_hash": comp["has_strong_hash"],
+                    "drift_type": "REMOVED",
+                }
+            )
 
     # 2. Dependency Graph Delta
     base_edges = _extract_dependency_edges(base_sbom_dict)
@@ -342,7 +350,9 @@ def compare_sboms(base_sbom_dict: Dict[str, Any], target_sbom_dict: Dict[str, An
         posture_message = f"Rilevato degrado di sicurezza: {hash_drop_count} hash crittografici eliminati nel target."
     elif hash_security_delta < 0 and hash_drop_count == 0:
         posture_verdict = "IMPROVED"
-        posture_message = f"Postura di sicurezza migliorata: copertura hash aumentata su {-hash_security_delta} componenti."
+        posture_message = (
+            f"Postura di sicurezza migliorata: copertura hash aumentata su {-hash_security_delta} componenti."
+        )
     else:
         posture_verdict = "STABLE"
         posture_message = "Postura di conformità e integrità stabile tra i rilasci."
@@ -355,7 +365,10 @@ def compare_sboms(base_sbom_dict: Dict[str, Any], target_sbom_dict: Dict[str, An
             "added_count": len(added_components),
             "removed_count": len(removed_components),
             "modified_count": len(modified_components),
-            "unchanged_count": max(0, len(base_components) - len(removed_components) - len(modified_components)),
+            "unchanged_count": max(
+                0,
+                len(base_components) - len(removed_components) - len(modified_components),
+            ),
             "license_drift_count": license_drift_count,
             "hash_drop_count": hash_drop_count,
             "supplier_drift_count": supplier_drift_count,
@@ -373,5 +386,5 @@ def compare_sboms(base_sbom_dict: Dict[str, Any], target_sbom_dict: Dict[str, An
             "removed_edges": removed_edges,
             "total_base_edges": len(base_edges),
             "total_target_edges": len(target_edges),
-        }
+        },
     }

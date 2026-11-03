@@ -9,10 +9,10 @@ Integrates:
 - EU Cyber Resilience Act (CRA) Art. 13 & Annex II Technical Documentation
 """
 
-import re
 import logging
-from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Tuple, Set
+import re
+from datetime import UTC, datetime
+from typing import Any
 
 from app.core.schema_engine import validate_sbom_schema_airgap
 
@@ -25,8 +25,18 @@ SUPPORTED_STANDARDS = {
 }
 
 LIFECYCLE_PHASES = {
-    "design", "source", "build", "analysed", "analyzed",
-    "deployed", "runtime", "pre-build", "post-build", "operations", "discovery", "decommission"
+    "design",
+    "source",
+    "build",
+    "analysed",
+    "analyzed",
+    "deployed",
+    "runtime",
+    "pre-build",
+    "post-build",
+    "operations",
+    "discovery",
+    "decommission",
 }
 
 # Standard RFC 5322 simplified email regex
@@ -36,82 +46,469 @@ URL_REGEX = re.compile(r"^https?://[^\s/$.?#].[^\s]*$", re.IGNORECASE)
 # PURL regex (RFC draft / spec)
 PURL_REGEX = re.compile(r"^pkg:[a-zA-Z0-9._-]+/[a-zA-Z0-9._@%/-]+", re.IGNORECASE)
 # CPE 2.3 / 2.2 regex
-CPE_REGEX = re.compile(r"^cpe:(?:2\.3:[aho](?::[a-zA-Z0-9._~%-]+){10}|/[aho]:[a-zA-Z0-9._~%-]+)", re.IGNORECASE)
+CPE_REGEX = re.compile(
+    r"^cpe:(?:2\.3:[aho](?::[a-zA-Z0-9._~%-]+){10}|/[aho]:[a-zA-Z0-9._~%-]+)",
+    re.IGNORECASE,
+)
 
 # Official SPDX 3.25+ License Identifiers (Core Canonical Set)
-SPDX_LICENSE_IDS = frozenset([
-    "0bsd", "aal", "abstyles", "adsl", "afl-1.1", "afl-1.2", "afl-2.0", "afl-2.1", "afl-3.0",
-    "agpl-1.0-only", "agpl-1.0-or-later", "agpl-3.0-only", "agpl-3.0-or-later",
-    "aladdin", "aml", "ampas", "antlr-pd", "antlr-pd-fallback", "apache-1.0", "apache-1.1",
-    "apache-2.0", "apafml", "apl-1.0", "app-s2p", "apsl-1.0", "apsl-1.1", "apsl-1.2", "apsl-2.0",
-    "arphic-1999", "artistic-1.0", "artistic-1.0-cl8", "artistic-1.0-perl", "artistic-2.0",
-    "baekmuk", "barr", "beerware", "bittorrent-1.0", "bittorrent-1.1", "borceux", "bsd-1-clause",
-    "bsd-2-clause", "bsd-2-clause-freebsd", "bsd-2-clause-netbsd", "bsd-2-clause-patent",
-    "bsd-2-clause-views", "bsd-3-clause", "bsd-3-clause-attribution", "bsd-3-clause-clear",
-    "bsd-3-clause-lbnl", "bsd-3-clause-modification", "bsd-3-clause-no-military-license",
-    "bsd-3-clause-no-nuclear-license", "bsd-3-clause-no-nuclear-license-2014",
-    "bsd-3-clause-no-nuclear-warranty", "bsd-3-clause-open-mpi", "bsd-4-clause", "bsd-4-clause-shortened",
-    "bsd-4-clause-uc", "bsd-protection", "bsl-1.0", "bzip2-1.0.5", "bzip2-1.0.6",
-    "cal-1.0", "cal-1.0-combined-work-exception", "caldera", "catosl-1.1", "cc-by-1.0",
-    "cc-by-2.0", "cc-by-2.5", "cc-by-3.0", "cc-by-4.0", "cc-by-nc-1.0", "cc-by-nc-2.0",
-    "cc-by-nc-2.5", "cc-by-nc-3.0", "cc-by-nc-4.0", "cc-by-nc-nd-1.0", "cc-by-nc-nd-2.0",
-    "cc-by-nc-nd-2.5", "cc-by-nc-nd-3.0", "cc-by-nc-nd-4.0", "cc-by-nc-sa-1.0", "cc-by-nc-sa-2.0",
-    "cc-by-nc-sa-2.5", "cc-by-nc-sa-3.0", "cc-by-nc-sa-4.0", "cc-by-nd-1.0", "cc-by-nd-2.0",
-    "cc-by-nd-2.5", "cc-by-nd-3.0", "cc-by-nd-4.0", "cc-by-sa-1.0", "cc-by-sa-2.0",
-    "cc-by-sa-2.5", "cc-by-sa-3.0", "cc-by-sa-4.0", "cc-pddc", "cc0-1.0", "cddl-1.0", "cddl-1.1",
-    "cdla-permissive-1.0", "cdla-permissive-2.0", "cdla-sharing-1.0", "cecill-1.0", "cecill-1.1",
-    "cecill-2.0", "cecill-2.1", "cecill-b", "cecill-c", "cern-ohl-1.1", "cern-ohl-1.2",
-    "cern-ohl-p-2.0", "cern-ohl-s-2.0", "cern-ohl-w-2.0", "cfitsiio", "checkmk", "clartistic",
-    "clips", "cmu-mach", "cnri-jython", "cnri-python", "cnri-python-gpl-compatible", "condor-1.1",
-    "copyleft-next-0.3.0", "copyleft-next-0.3.1", "cpal-1.0", "cpl-1.0", "cptycl", "crossword",
-    "crystalstacker", "cua-opl-1.0", "cube", "curl", "d-fsl-1.0", "diffmark", "doc", "dotseqn",
-    "dsdp", "dtoa", "dvipdfm", "ecl-1.0", "ecl-2.0", "efl-1.0", "efl-2.0", "egenix", "entessa",
-    "epics", "epl-1.0", "epl-2.0", "erlpl-1.1", "etalfir-1.0", "eudatagrid", "eupl-1.0",
-    "eupl-1.1", "eupl-1.2", "eurosym", "fair", "fbm", "fdl-1.1-only", "fdl-1.1-or-later",
-    "fdl-1.2-only", "fdl-1.2-or-later", "fdl-1.3-only", "fdl-1.3-or-later", "freebsd-doc",
-    "freeimage", "fsfap", "fsful", "fsfullr", "ftl", "gcr-docs", "gd", "giftware", "gl2ps",
-    "glide", "glulxe", "gnuplot", "gpl-1.0-only", "gpl-1.0-or-later", "gpl-2.0-only",
-    "gpl-2.0-or-later", "gpl-3.0-only", "gpl-3.0-or-later", "gsoap-1.3b", "haskellreport",
-    "hippocratic-2.1", "hp-1986", "hpnd", "hpnd-sell-variant", "htmltidy", "ibm-pibs", "icu",
-    "iec-code-components-eula", "ijg", "ijg-short", "imagemagick", "imatix", "imlib2", "info-zip",
-    "inner-net-2.0", "intel", "intel-acpi", "interbase-1.0", "ipa", "ipl-1.0", "isc", "jam",
-    "jasper-2.0", "jpl-image", "jpnic", "json", "kfgpl", "lal-1.2", "lal-1.3", "latex2e",
-    "leptonica", "lgpl-2.0-only", "lgpl-2.0-or-later", "lgpl-2.1-only", "lgpl-2.1-or-later",
-    "lgpl-3.0-only", "lgpl-3.0-or-later", "lgtm", "libpng", "libpng-2.0", "libselinux-1.0",
-    "libtiff", "libutil-david-gibson", "liliq-p-1.1", "liliq-r-1.1", "liliq-rplus-1.1",
-    "linux-man-pages-1-para", "linux-man-pages-copyleft", "linux-man-pages-copyleft-2-para",
-    "linux-man-pages-copyleft-var", "linux-openib", "loop", "lpl-1.0", "lpl-1.02", "lppl-1.0",
-    "lppl-1.1", "lppl-1.2", "lppl-1.3a", "lppl-1.3c", "lzma-sdk-9.22", "makeindex", "mips",
-    "mit", "mit-0", "mit-advertising", "mit-cmu", "mit-enna", "mit-feh", "mit-modern-variant",
-    "mit-open-group", "mit-wu", "mitnfa", "motosoto", "mpi-permissive", "mpich2", "mpl-1.0",
-    "mpl-1.1", "mpl-2.0", "mpl-2.0-no-copyleft-exception", "mplus", "mup", "naist-2003",
-    "nasa-1.3", "naumen", "nbpl-1.0", "ncgl-uk-2.0", "ncsa", "net-snmp", "netcdf", "newsletr",
-    "ngpl", "nicta-1.0", "nist-pd", "nist-pd-fallback", "nist-software", "nlod-1.0", "nlod-2.0",
-    "nlpl", "nokia", "nosl", "noweb", "npl-1.0", "npl-1.1", "nposl-3.0", "nrl", "ntp",
-    "ntp-0", "nunit", "o-uda-1.0", "occt-pl", "oclc-2.0", "odbl-1.0", "odc-by-1.0",
-    "offis", "ofl-1.0", "ofl-1.0-no-rfn", "ofl-1.0-rfn", "ofl-1.1", "ofl-1.1-no-rfn",
-    "ofl-1.1-rfn", "ogc-1.0", "ogdl-taiwan-1.0", "ogl-canada-2.0", "ogl-uk-1.0", "ogl-uk-2.0",
-    "ogl-uk-3.0", "ogtsl", "oldap-1.1", "oldap-1.2", "oldap-1.3", "oldap-1.4", "oldap-2.0",
-    "oldap-2.0.1", "oldap-2.1", "oldap-2.2", "oldap-2.2.1", "oldap-2.2.2", "oldap-2.3",
-    "oldap-2.4", "oldap-2.5", "oldap-2.6", "oldap-2.7", "oldap-2.8", "olfl-1.3", "oml",
-    "openssl", "opl-1.0", "opl-uk-3.0", "oset-pl-2.1", "osl-1.0", "osl-1.1", "osl-2.0",
-    "osl-2.1", "osl-3.0", "parity-6.0.0", "parity-7.0.0", "pddl-1.0", "php-3.0", "php-3.01",
-    "plexus", "polyform-noncommercial-1.0.0", "polyform-small-business-1.0.0", "postgresql",
-    "psf-2.0", "psfrag", "psutils", "python-2.0", "python-2.0.1", "python-ldap", "qhull",
-    "qpl-1.0", "radvd", "rdisc", "rpsl-1.0", "rsa-md", "rscpl", "ruby", "saftp", "sax-pd",
-    "saxpath", "scea", "schemereport", "sendmail", "sendmail-8.23", "sgi-b-1.0", "sgi-b-1.1",
-    "sgi-b-2.0", "sgp4", "shl-0.5", "shl-0.51", "simpl-2.0", "sisscl", "sisscl-1.2", "sleepycat",
-    "smlnj", "smppl", "snia", "snprintf", "sorcmc", "spencer-86", "spencer-94", "spencer-99",
-    "spl-1.0", "ssh-keyscan", "ssh-openssh", "ssleay", "sspl-1.0", "standardml-nj", "sugarcrm-1.1.3",
-    "sunpro", "swl", "symlinks", "tapr-ohl-1.0", "tcl", "tcp-wrappers", "termchem", "thirdeye",
-    "threatgrid", "tldr-pages", "torque-1.1", "tosl", "tpdl", "tpl-1.0", "ttwl", "tu-berlin-1.0",
-    "tu-berlin-2.0", "ucar", "ucl-1.0", "unicode-dfs-2015", "unicode-dfs-2016", "unicode-inc-2024",
-    "unicode-tou", "unixcrypt", "unlicense", "upl-1.0", "vim", "vostrom", "vsl-1.0", "w3c",
-    "w3c-19980720", "w3c-20150513", "w3m", "watcom-1.0", "widget-workshop", "wsuipa", "wtfpl",
-    "wxwindows", "x11", "x11-distribute-modifications-variant", "x11-swapped", "xfree86-1.1",
-    "xinetd", "xlock", "xnet", "xpp", "xskat", "ypl-1.0", "ypl-1.1", "zed", "zeepl-1.0",
-    "zend-2.0", "zimbra-1.3", "zimbra-1.4", "zlib", "zlib-acknowledgement", "zpl-1.1", "zpl-2.0", "zpl-2.1"
-])
+SPDX_LICENSE_IDS = frozenset(
+    [
+        "0bsd",
+        "aal",
+        "abstyles",
+        "adsl",
+        "afl-1.1",
+        "afl-1.2",
+        "afl-2.0",
+        "afl-2.1",
+        "afl-3.0",
+        "agpl-1.0-only",
+        "agpl-1.0-or-later",
+        "agpl-3.0-only",
+        "agpl-3.0-or-later",
+        "aladdin",
+        "aml",
+        "ampas",
+        "antlr-pd",
+        "antlr-pd-fallback",
+        "apache-1.0",
+        "apache-1.1",
+        "apache-2.0",
+        "apafml",
+        "apl-1.0",
+        "app-s2p",
+        "apsl-1.0",
+        "apsl-1.1",
+        "apsl-1.2",
+        "apsl-2.0",
+        "arphic-1999",
+        "artistic-1.0",
+        "artistic-1.0-cl8",
+        "artistic-1.0-perl",
+        "artistic-2.0",
+        "baekmuk",
+        "barr",
+        "beerware",
+        "bittorrent-1.0",
+        "bittorrent-1.1",
+        "borceux",
+        "bsd-1-clause",
+        "bsd-2-clause",
+        "bsd-2-clause-freebsd",
+        "bsd-2-clause-netbsd",
+        "bsd-2-clause-patent",
+        "bsd-2-clause-views",
+        "bsd-3-clause",
+        "bsd-3-clause-attribution",
+        "bsd-3-clause-clear",
+        "bsd-3-clause-lbnl",
+        "bsd-3-clause-modification",
+        "bsd-3-clause-no-military-license",
+        "bsd-3-clause-no-nuclear-license",
+        "bsd-3-clause-no-nuclear-license-2014",
+        "bsd-3-clause-no-nuclear-warranty",
+        "bsd-3-clause-open-mpi",
+        "bsd-4-clause",
+        "bsd-4-clause-shortened",
+        "bsd-4-clause-uc",
+        "bsd-protection",
+        "bsl-1.0",
+        "bzip2-1.0.5",
+        "bzip2-1.0.6",
+        "cal-1.0",
+        "cal-1.0-combined-work-exception",
+        "caldera",
+        "catosl-1.1",
+        "cc-by-1.0",
+        "cc-by-2.0",
+        "cc-by-2.5",
+        "cc-by-3.0",
+        "cc-by-4.0",
+        "cc-by-nc-1.0",
+        "cc-by-nc-2.0",
+        "cc-by-nc-2.5",
+        "cc-by-nc-3.0",
+        "cc-by-nc-4.0",
+        "cc-by-nc-nd-1.0",
+        "cc-by-nc-nd-2.0",
+        "cc-by-nc-nd-2.5",
+        "cc-by-nc-nd-3.0",
+        "cc-by-nc-nd-4.0",
+        "cc-by-nc-sa-1.0",
+        "cc-by-nc-sa-2.0",
+        "cc-by-nc-sa-2.5",
+        "cc-by-nc-sa-3.0",
+        "cc-by-nc-sa-4.0",
+        "cc-by-nd-1.0",
+        "cc-by-nd-2.0",
+        "cc-by-nd-2.5",
+        "cc-by-nd-3.0",
+        "cc-by-nd-4.0",
+        "cc-by-sa-1.0",
+        "cc-by-sa-2.0",
+        "cc-by-sa-2.5",
+        "cc-by-sa-3.0",
+        "cc-by-sa-4.0",
+        "cc-pddc",
+        "cc0-1.0",
+        "cddl-1.0",
+        "cddl-1.1",
+        "cdla-permissive-1.0",
+        "cdla-permissive-2.0",
+        "cdla-sharing-1.0",
+        "cecill-1.0",
+        "cecill-1.1",
+        "cecill-2.0",
+        "cecill-2.1",
+        "cecill-b",
+        "cecill-c",
+        "cern-ohl-1.1",
+        "cern-ohl-1.2",
+        "cern-ohl-p-2.0",
+        "cern-ohl-s-2.0",
+        "cern-ohl-w-2.0",
+        "cfitsiio",
+        "checkmk",
+        "clartistic",
+        "clips",
+        "cmu-mach",
+        "cnri-jython",
+        "cnri-python",
+        "cnri-python-gpl-compatible",
+        "condor-1.1",
+        "copyleft-next-0.3.0",
+        "copyleft-next-0.3.1",
+        "cpal-1.0",
+        "cpl-1.0",
+        "cptycl",
+        "crossword",
+        "crystalstacker",
+        "cua-opl-1.0",
+        "cube",
+        "curl",
+        "d-fsl-1.0",
+        "diffmark",
+        "doc",
+        "dotseqn",
+        "dsdp",
+        "dtoa",
+        "dvipdfm",
+        "ecl-1.0",
+        "ecl-2.0",
+        "efl-1.0",
+        "efl-2.0",
+        "egenix",
+        "entessa",
+        "epics",
+        "epl-1.0",
+        "epl-2.0",
+        "erlpl-1.1",
+        "etalfir-1.0",
+        "eudatagrid",
+        "eupl-1.0",
+        "eupl-1.1",
+        "eupl-1.2",
+        "eurosym",
+        "fair",
+        "fbm",
+        "fdl-1.1-only",
+        "fdl-1.1-or-later",
+        "fdl-1.2-only",
+        "fdl-1.2-or-later",
+        "fdl-1.3-only",
+        "fdl-1.3-or-later",
+        "freebsd-doc",
+        "freeimage",
+        "fsfap",
+        "fsful",
+        "fsfullr",
+        "ftl",
+        "gcr-docs",
+        "gd",
+        "giftware",
+        "gl2ps",
+        "glide",
+        "glulxe",
+        "gnuplot",
+        "gpl-1.0-only",
+        "gpl-1.0-or-later",
+        "gpl-2.0-only",
+        "gpl-2.0-or-later",
+        "gpl-3.0-only",
+        "gpl-3.0-or-later",
+        "gsoap-1.3b",
+        "haskellreport",
+        "hippocratic-2.1",
+        "hp-1986",
+        "hpnd",
+        "hpnd-sell-variant",
+        "htmltidy",
+        "ibm-pibs",
+        "icu",
+        "iec-code-components-eula",
+        "ijg",
+        "ijg-short",
+        "imagemagick",
+        "imatix",
+        "imlib2",
+        "info-zip",
+        "inner-net-2.0",
+        "intel",
+        "intel-acpi",
+        "interbase-1.0",
+        "ipa",
+        "ipl-1.0",
+        "isc",
+        "jam",
+        "jasper-2.0",
+        "jpl-image",
+        "jpnic",
+        "json",
+        "kfgpl",
+        "lal-1.2",
+        "lal-1.3",
+        "latex2e",
+        "leptonica",
+        "lgpl-2.0-only",
+        "lgpl-2.0-or-later",
+        "lgpl-2.1-only",
+        "lgpl-2.1-or-later",
+        "lgpl-3.0-only",
+        "lgpl-3.0-or-later",
+        "lgtm",
+        "libpng",
+        "libpng-2.0",
+        "libselinux-1.0",
+        "libtiff",
+        "libutil-david-gibson",
+        "liliq-p-1.1",
+        "liliq-r-1.1",
+        "liliq-rplus-1.1",
+        "linux-man-pages-1-para",
+        "linux-man-pages-copyleft",
+        "linux-man-pages-copyleft-2-para",
+        "linux-man-pages-copyleft-var",
+        "linux-openib",
+        "loop",
+        "lpl-1.0",
+        "lpl-1.02",
+        "lppl-1.0",
+        "lppl-1.1",
+        "lppl-1.2",
+        "lppl-1.3a",
+        "lppl-1.3c",
+        "lzma-sdk-9.22",
+        "makeindex",
+        "mips",
+        "mit",
+        "mit-0",
+        "mit-advertising",
+        "mit-cmu",
+        "mit-enna",
+        "mit-feh",
+        "mit-modern-variant",
+        "mit-open-group",
+        "mit-wu",
+        "mitnfa",
+        "motosoto",
+        "mpi-permissive",
+        "mpich2",
+        "mpl-1.0",
+        "mpl-1.1",
+        "mpl-2.0",
+        "mpl-2.0-no-copyleft-exception",
+        "mplus",
+        "mup",
+        "naist-2003",
+        "nasa-1.3",
+        "naumen",
+        "nbpl-1.0",
+        "ncgl-uk-2.0",
+        "ncsa",
+        "net-snmp",
+        "netcdf",
+        "newsletr",
+        "ngpl",
+        "nicta-1.0",
+        "nist-pd",
+        "nist-pd-fallback",
+        "nist-software",
+        "nlod-1.0",
+        "nlod-2.0",
+        "nlpl",
+        "nokia",
+        "nosl",
+        "noweb",
+        "npl-1.0",
+        "npl-1.1",
+        "nposl-3.0",
+        "nrl",
+        "ntp",
+        "ntp-0",
+        "nunit",
+        "o-uda-1.0",
+        "occt-pl",
+        "oclc-2.0",
+        "odbl-1.0",
+        "odc-by-1.0",
+        "offis",
+        "ofl-1.0",
+        "ofl-1.0-no-rfn",
+        "ofl-1.0-rfn",
+        "ofl-1.1",
+        "ofl-1.1-no-rfn",
+        "ofl-1.1-rfn",
+        "ogc-1.0",
+        "ogdl-taiwan-1.0",
+        "ogl-canada-2.0",
+        "ogl-uk-1.0",
+        "ogl-uk-2.0",
+        "ogl-uk-3.0",
+        "ogtsl",
+        "oldap-1.1",
+        "oldap-1.2",
+        "oldap-1.3",
+        "oldap-1.4",
+        "oldap-2.0",
+        "oldap-2.0.1",
+        "oldap-2.1",
+        "oldap-2.2",
+        "oldap-2.2.1",
+        "oldap-2.2.2",
+        "oldap-2.3",
+        "oldap-2.4",
+        "oldap-2.5",
+        "oldap-2.6",
+        "oldap-2.7",
+        "oldap-2.8",
+        "olfl-1.3",
+        "oml",
+        "openssl",
+        "opl-1.0",
+        "opl-uk-3.0",
+        "oset-pl-2.1",
+        "osl-1.0",
+        "osl-1.1",
+        "osl-2.0",
+        "osl-2.1",
+        "osl-3.0",
+        "parity-6.0.0",
+        "parity-7.0.0",
+        "pddl-1.0",
+        "php-3.0",
+        "php-3.01",
+        "plexus",
+        "polyform-noncommercial-1.0.0",
+        "polyform-small-business-1.0.0",
+        "postgresql",
+        "psf-2.0",
+        "psfrag",
+        "psutils",
+        "python-2.0",
+        "python-2.0.1",
+        "python-ldap",
+        "qhull",
+        "qpl-1.0",
+        "radvd",
+        "rdisc",
+        "rpsl-1.0",
+        "rsa-md",
+        "rscpl",
+        "ruby",
+        "saftp",
+        "sax-pd",
+        "saxpath",
+        "scea",
+        "schemereport",
+        "sendmail",
+        "sendmail-8.23",
+        "sgi-b-1.0",
+        "sgi-b-1.1",
+        "sgi-b-2.0",
+        "sgp4",
+        "shl-0.5",
+        "shl-0.51",
+        "simpl-2.0",
+        "sisscl",
+        "sisscl-1.2",
+        "sleepycat",
+        "smlnj",
+        "smppl",
+        "snia",
+        "snprintf",
+        "sorcmc",
+        "spencer-86",
+        "spencer-94",
+        "spencer-99",
+        "spl-1.0",
+        "ssh-keyscan",
+        "ssh-openssh",
+        "ssleay",
+        "sspl-1.0",
+        "standardml-nj",
+        "sugarcrm-1.1.3",
+        "sunpro",
+        "swl",
+        "symlinks",
+        "tapr-ohl-1.0",
+        "tcl",
+        "tcp-wrappers",
+        "termchem",
+        "thirdeye",
+        "threatgrid",
+        "tldr-pages",
+        "torque-1.1",
+        "tosl",
+        "tpdl",
+        "tpl-1.0",
+        "ttwl",
+        "tu-berlin-1.0",
+        "tu-berlin-2.0",
+        "ucar",
+        "ucl-1.0",
+        "unicode-dfs-2015",
+        "unicode-dfs-2016",
+        "unicode-inc-2024",
+        "unicode-tou",
+        "unixcrypt",
+        "unlicense",
+        "upl-1.0",
+        "vim",
+        "vostrom",
+        "vsl-1.0",
+        "w3c",
+        "w3c-19980720",
+        "w3c-20150513",
+        "w3m",
+        "watcom-1.0",
+        "widget-workshop",
+        "wsuipa",
+        "wtfpl",
+        "wxwindows",
+        "x11",
+        "x11-distribute-modifications-variant",
+        "x11-swapped",
+        "xfree86-1.1",
+        "xinetd",
+        "xlock",
+        "xnet",
+        "xpp",
+        "xskat",
+        "ypl-1.0",
+        "ypl-1.1",
+        "zed",
+        "zeepl-1.0",
+        "zend-2.0",
+        "zimbra-1.3",
+        "zimbra-1.4",
+        "zlib",
+        "zlib-acknowledgement",
+        "zpl-1.1",
+        "zpl-2.0",
+        "zpl-2.1",
+    ]
+)
 
 
 def is_valid_spdx_expression(expr: str) -> bool:
@@ -154,7 +551,7 @@ def is_valid_spdx_expression(expr: str) -> bool:
     return has_license_token
 
 
-def is_email_or_url(contact: Optional[str]) -> bool:
+def is_email_or_url(contact: str | None) -> bool:
     """Validates if contact string is an RFC 5322 email or valid URL."""
     if not contact or not isinstance(contact, str):
         return False
@@ -170,7 +567,7 @@ def is_email_or_url(contact: Optional[str]) -> bool:
     return False
 
 
-def is_valid_utc_timestamp(ts: Optional[str]) -> bool:
+def is_valid_utc_timestamp(ts: str | None) -> bool:
     """Validates if timestamp is a valid RFC 3339 / ISO 8601 UTC timestamp."""
     if not ts or not isinstance(ts, str):
         return False
@@ -182,7 +579,7 @@ def is_valid_utc_timestamp(ts: Optional[str]) -> bool:
     try:
         # Standard ISO 8601 parsing
         dt = datetime.fromisoformat(clean.replace("Z", "+00:00"))
-        return has_utc_indicator or (dt.tzinfo is not None and dt.utcoffset() == timezone.utc.utcoffset(dt))
+        return has_utc_indicator or (dt.tzinfo is not None and dt.utcoffset() == UTC.utcoffset(dt))
     except Exception:
         # Fallback regex for common RFC 3339 patterns
         return bool(re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$", clean))
@@ -197,12 +594,12 @@ class EnisaComplianceAuditor:
     def __init__(
         self,
         proprietary_prefix: str = "regubom:proprietary",
-        proprietary_supplier: Optional[str] = None
+        proprietary_supplier: str | None = None,
     ):
         self.proprietary_prefix = (proprietary_prefix or "regubom:proprietary").strip().lower()
         self.proprietary_supplier = (proprietary_supplier or "").strip().lower()
 
-    def audit(self, sbom_dict: Dict[str, Any], file_imprint: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def audit(self, sbom_dict: dict[str, Any], file_imprint: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Executes comprehensive ENISA/BSI audit on an SBOM dictionary.
         Returns a complete dossier including:
@@ -234,8 +631,12 @@ class EnisaComplianceAuditor:
 
         # 5. Build 12-Point Regulatory Checklist
         checklist = self._build_12_point_checklist(
-            format_info, doc_metadata, matrix_rows, matrix_stats,
-            schema_valid=schema_valid, schema_err=schema_err
+            format_info,
+            doc_metadata,
+            matrix_rows,
+            matrix_stats,
+            schema_valid=schema_valid,
+            schema_err=schema_err,
         )
 
         # 6. Overall Compliance Verdict
@@ -244,7 +645,9 @@ class EnisaComplianceAuditor:
         # - Missing supplier/hashes on 3rd party OSS -> WARNING
         # - All passed -> PASS
         has_critical_failure = any(item["status"] == "FAIL" for item in checklist)
-        has_warnings = any(item["status"] == "WARNING" for item in checklist) or matrix_stats["proprietary_with_gaps"] > 0
+        has_warnings = (
+            any(item["status"] == "WARNING" for item in checklist) or matrix_stats["proprietary_with_gaps"] > 0
+        )
 
         if has_critical_failure or matrix_stats["proprietary_with_gaps"] > 0:
             overall_status = "FAIL"
@@ -268,7 +671,7 @@ class EnisaComplianceAuditor:
         certificate_data = {
             "regubom_gateway_version": "2.0.0",
             "standard_profile": "ENISA-Technical-Advisory-2026 / BSI TR-03183-2 v2.1.0",
-            "audit_timestamp": datetime.now(timezone.utc).isoformat(),
+            "audit_timestamp": datetime.now(UTC).isoformat(),
             "overall_status": overall_status,
             "overall_valid": overall_valid,
             "format": format_info["display"],
@@ -293,13 +696,18 @@ class EnisaComplianceAuditor:
     # -------------------------------------------------------------------------
     # Format & Spec Detection
     # -------------------------------------------------------------------------
-    def _detect_format_and_version(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _detect_format_and_version(self, data: dict[str, Any]) -> dict[str, Any]:
         """Identifies standard format, schema version, and regulatory acceptance."""
         bom_format = str(data.get("bomFormat", "")).strip()
         spec_version = str(data.get("specVersion", "")).strip()
 
         spdx_version = str(data.get("spdxVersion", "")).strip()
-        is_spdx_3 = "@context" in data or data.get("type") == "SpdxDocument" or "spdxVersion" in data and "3." in str(data.get("spdxVersion"))
+        is_spdx_3 = (
+            "@context" in data
+            or data.get("type") == "SpdxDocument"
+            or "spdxVersion" in data
+            and "3." in str(data.get("spdxVersion"))
+        )
 
         if bom_format.lower() == "cyclonedx":
             is_supported = spec_version in SUPPORTED_STANDARDS["cyclonedx"]
@@ -336,14 +744,14 @@ class EnisaComplianceAuditor:
     # -------------------------------------------------------------------------
     # Table 1: Document Metadata Audit
     # -------------------------------------------------------------------------
-    def _audit_document_metadata(self, data: Dict[str, Any], format_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _audit_document_metadata(self, data: dict[str, Any], format_info: dict[str, Any]) -> dict[str, Any]:
         """Audits Table 1 elements: Author, Timestamp, Lifecycle, Tools, Signatures."""
         metadata = data.get("metadata", {}) if isinstance(data.get("metadata"), dict) else {}
         is_cdx = format_info["format"] == "cyclonedx"
         is_spdx = format_info["format"] == "spdx"
 
         # 1. Author / Creator (RFC 5322 email or valid URL)
-        authors_found: List[str] = []
+        authors_found: list[str] = []
         author_valid = False
 
         if is_cdx:
@@ -436,7 +844,7 @@ class EnisaComplianceAuditor:
             lifecycle_phase = "Build (Inferred)" if has_lifecycle else "Unspecified"
 
         # 4. Tool / Engine Identity
-        tools_found: List[str] = []
+        tools_found: list[str] = []
         tools_valid = False
 
         if is_cdx:
@@ -474,7 +882,7 @@ class EnisaComplianceAuditor:
 
         # 5. Cryptographic Signature / Attestation Verification
         has_signature = False
-        signature_details: List[str] = []
+        signature_details: list[str] = []
 
         if is_cdx:
             # Root signature object
@@ -489,7 +897,11 @@ class EnisaComplianceAuditor:
                     if isinstance(ref, dict):
                         ref_type = str(ref.get("type", "")).lower()
                         ref_comment = str(ref.get("comment", "")).lower()
-                        if ref_type in ("attestation", "signature", "release-notes") or "cosign" in ref_comment or "in-toto" in ref_comment:
+                        if (
+                            ref_type in ("attestation", "signature", "release-notes")
+                            or "cosign" in ref_comment
+                            or "in-toto" in ref_comment
+                        ):
                             has_signature = True
                             signature_details.append(f"Attestation Reference: {ref.get('url', ref_type)}")
             # Signature properties
@@ -525,7 +937,7 @@ class EnisaComplianceAuditor:
             "serial_number": str(data.get("serialNumber") or data.get("SPDXID") or "N/D"),
         }
 
-    def _extract_root_product(self, data: Dict[str, Any], format_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_root_product(self, data: dict[str, Any], format_info: dict[str, Any]) -> dict[str, Any]:
         """Extracts the primary product / target component definition."""
         if format_info["format"] == "cyclonedx":
             meta_comp = data.get("metadata", {}).get("component")
@@ -534,7 +946,9 @@ class EnisaComplianceAuditor:
                     "name": meta_comp.get("name", "N/D"),
                     "version": meta_comp.get("version", "N/D"),
                     "type": meta_comp.get("type", "application"),
-                    "supplier": meta_comp.get("supplier", {}).get("name", "N/D") if isinstance(meta_comp.get("supplier"), dict) else str(meta_comp.get("supplier") or "N/D"),
+                    "supplier": meta_comp.get("supplier", {}).get("name", "N/D")
+                    if isinstance(meta_comp.get("supplier"), dict)
+                    else str(meta_comp.get("supplier") or "N/D"),
                     "purl": meta_comp.get("purl"),
                     "cpe": meta_comp.get("cpe"),
                 }
@@ -544,7 +958,9 @@ class EnisaComplianceAuditor:
                 "name": doc_name,
                 "version": "1.0.0",
                 "type": "application",
-                "supplier": data.get("creationInfo", {}).get("creators", ["N/D"])[0] if data.get("creationInfo", {}).get("creators") else "N/D",
+                "supplier": data.get("creationInfo", {}).get("creators", ["N/D"])[0]
+                if data.get("creationInfo", {}).get("creators")
+                else "N/D",
                 "purl": None,
                 "cpe": None,
             }
@@ -562,14 +978,12 @@ class EnisaComplianceAuditor:
     # Component Extraction & Dependency Graph
     # -------------------------------------------------------------------------
     def _extract_components_and_graph(
-        self,
-        data: Dict[str, Any],
-        format_info: Dict[str, Any]
-    ) -> Tuple[List[Dict[str, Any]], Set[str]]:
+        self, data: dict[str, Any], format_info: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], set[str]]:
         """Extracts component records and resolves dependency graph references."""
         is_cdx = format_info["format"] == "cyclonedx"
-        components: List[Dict[str, Any]] = []
-        referenced_in_graph: Set[str] = set()
+        components: list[dict[str, Any]] = []
+        referenced_in_graph: set[str] = set()
 
         if is_cdx:
             # 1. Dependency Graph references
@@ -624,17 +1038,15 @@ class EnisaComplianceAuditor:
     # Component Evaluation & Bifurcated 1st vs 3rd Party Analysis
     # -------------------------------------------------------------------------
     def _evaluate_components(
-        self,
-        components_raw: List[Dict[str, Any]],
-        dependency_graph: Set[str]
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        self, components_raw: list[dict[str, Any]], dependency_graph: set[str]
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """
         Evaluates each component against BSI/CISA criteria:
         Name, Version, Identifiers (PURL/CPE), Supplier, Hash (SHA-256/512),
         Licenses (SPDX expression, raw text, or missing), Graph Relations,
         BSI properties, and Known Unknowns.
         """
-        matrix_rows: List[Dict[str, Any]] = []
+        matrix_rows: list[dict[str, Any]] = []
 
         total_components = len(components_raw)
         proprietary_count = 0
@@ -774,12 +1186,15 @@ class EnisaComplianceAuditor:
             "non_spdx_licenses_count": non_spdx_licenses_count,
             "missing_licenses_count": missing_licenses_count,
             "orphaned_count": orphaned_count,
-            "compliance_rate": round(((total_components - (proprietary_with_gaps + third_party_with_gaps)) / max(1, total_components)) * 100, 1),
+            "compliance_rate": round(
+                ((total_components - (proprietary_with_gaps + third_party_with_gaps)) / max(1, total_components)) * 100,
+                1,
+            ),
         }
 
         return matrix_rows, statistics
 
-    def _is_proprietary_component(self, comp: Dict[str, Any]) -> bool:
+    def _is_proprietary_component(self, comp: dict[str, Any]) -> bool:
         """Determines if a component is proprietary based on tenant prefix or supplier."""
         # 1. Properties inspection
         props = comp.get("properties", [])
@@ -789,7 +1204,11 @@ class EnisaComplianceAuditor:
                     pname = str(p.get("name", "")).strip().lower()
                     pval = str(p.get("value", "")).strip().lower()
                     # Matches tenant configured prefix (e.g., regubom:proprietary or custom)
-                    if pname.startswith(self.proprietary_prefix) and pval in ("true", "1", "yes"):
+                    if pname.startswith(self.proprietary_prefix) and pval in (
+                        "true",
+                        "1",
+                        "yes",
+                    ):
                         return True
                     if pname == "regubom:proprietary" and pval == "true":
                         return True
@@ -804,7 +1223,7 @@ class EnisaComplianceAuditor:
 
         return False
 
-    def _evaluate_supplier(self, comp: Dict[str, Any]) -> Tuple[str, bool]:
+    def _evaluate_supplier(self, comp: dict[str, Any]) -> tuple[str, bool]:
         """Extracts supplier name and checks if valid entity name, email, or URL."""
         supplier = comp.get("supplier") or comp.get("packageSupplier")
         if isinstance(supplier, dict):
@@ -833,9 +1252,9 @@ class EnisaComplianceAuditor:
 
         return "N/D", False
 
-    def _evaluate_hashes(self, comp: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    def _evaluate_hashes(self, comp: dict[str, Any]) -> tuple[bool, list[str]]:
         """Checks for cryptographic digest presence (SHA-256 or SHA-512)."""
-        hashes_list: List[str] = []
+        hashes_list: list[str] = []
         has_strong_hash = False
 
         # CycloneDX hashes array: [{"alg": "SHA-256", "content": "..."}]
@@ -864,7 +1283,7 @@ class EnisaComplianceAuditor:
 
         return has_strong_hash, hashes_list
 
-    def _evaluate_license(self, comp: Dict[str, Any]) -> Tuple[str, str]:
+    def _evaluate_license(self, comp: dict[str, Any]) -> tuple[str, str]:
         """
         Distinguishes:
         - Valid SPDX identifier/expression: '✓'
@@ -904,10 +1323,15 @@ class EnisaComplianceAuditor:
 
         return "✕", "Mancante (N/D)"
 
-    def _evaluate_bsi_properties(self, comp: Dict[str, Any]) -> Dict[str, bool]:
+    def _evaluate_bsi_properties(self, comp: dict[str, Any]) -> dict[str, bool]:
         """Checks for BSI TR-03183-2 structured properties (executable, archive, metadata)."""
         comp_type = str(comp.get("type") or comp.get("primaryPackagePurpose") or "").lower()
-        is_executable = comp_type in ("application", "framework", "operating-system", "executable")
+        is_executable = comp_type in (
+            "application",
+            "framework",
+            "operating-system",
+            "executable",
+        )
         is_archive = comp_type in ("archive", "container", "file")
 
         has_structured = False
@@ -921,7 +1345,7 @@ class EnisaComplianceAuditor:
             "has_structured_metadata": has_structured,
         }
 
-    def _detect_known_unknowns(self, comp: Dict[str, Any]) -> bool:
+    def _detect_known_unknowns(self, comp: dict[str, Any]) -> bool:
         """Detects whether missing fields were explicitly acknowledged as unknown."""
         for val in comp.values():
             if val in ("NOASSERTION", "unknown", "none"):
@@ -933,197 +1357,230 @@ class EnisaComplianceAuditor:
     # -------------------------------------------------------------------------
     def _build_12_point_checklist(
         self,
-        format_info: Dict[str, Any],
-        doc_metadata: Dict[str, Any],
-        matrix_rows: List[Dict[str, Any]],
-        stats: Dict[str, Any],
+        format_info: dict[str, Any],
+        doc_metadata: dict[str, Any],
+        matrix_rows: list[dict[str, Any]],
+        stats: dict[str, Any],
         schema_valid: bool = True,
-        schema_err: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        schema_err: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Compiles the 12 regulatory audit criteria with status and descriptions."""
-        checklist: List[Dict[str, Any]] = []
+        checklist: list[dict[str, Any]] = []
 
         total_comps = stats["components_total"]
 
         # Item 1: Standards & Formats (CycloneDX 1.6/1.7 or SPDX 2.3/3.0.1)
         fmt_ok = format_info["is_supported"] and schema_valid
         if not format_info["is_supported"]:
-            fmt_detail = f"Formato non supportato: {format_info['display']}. Richiesto CycloneDX 1.6/1.7 o SPDX 2.3/3.0.1."
+            fmt_detail = (
+                f"Formato non supportato: {format_info['display']}. Richiesto CycloneDX 1.6/1.7 o SPDX 2.3/3.0.1."
+            )
         elif not schema_valid:
-            fmt_detail = f"Formato: {format_info['display']}. Errore validazione schema JSON air-gap locale: {schema_err}"
+            fmt_detail = (
+                f"Formato: {format_info['display']}. Errore validazione schema JSON air-gap locale: {schema_err}"
+            )
         else:
             fmt_detail = f"Formato: {format_info['display']} ({format_info['standard']}). Schema JSON validato con successo in modalità locale air-gap (zero-telemetria)."
 
-        checklist.append({
-            "id": "ENISA-01-STANDARD",
-            "title": "Standard e Formato Ufficiale (CycloneDX 1.6/1.7 o SPDX 2.3/3.0.1)",
-            "passed": fmt_ok,
-            "status": "PASS" if fmt_ok else "FAIL",
-            "total_count": 1,
-            "missing_count": 0 if fmt_ok else 1,
-            "detail": fmt_detail,
-        })
+        checklist.append(
+            {
+                "id": "ENISA-01-STANDARD",
+                "title": "Standard e Formato Ufficiale (CycloneDX 1.6/1.7 o SPDX 2.3/3.0.1)",
+                "passed": fmt_ok,
+                "status": "PASS" if fmt_ok else "FAIL",
+                "total_count": 1,
+                "missing_count": 0 if fmt_ok else 1,
+                "detail": fmt_detail,
+            }
+        )
 
         # Item 2: Document Timestamp
         ts_ok = doc_metadata["timestamp_valid"]
-        checklist.append({
-            "id": "ENISA-02-TIMESTAMP",
-            "title": "Timestamp del Documento (Formato UTC RFC 3339)",
-            "passed": ts_ok,
-            "status": "PASS" if ts_ok else "FAIL",
-            "total_count": 1,
-            "missing_count": 0 if ts_ok else 1,
-            "detail": f"Timestamp rilevato: {doc_metadata['timestamp']}. " +
-                      ("Valido UTC ISO-8601/RFC-3339." if ts_ok else "Mancante o non in formato UTC valido."),
-        })
+        checklist.append(
+            {
+                "id": "ENISA-02-TIMESTAMP",
+                "title": "Timestamp del Documento (Formato UTC RFC 3339)",
+                "passed": ts_ok,
+                "status": "PASS" if ts_ok else "FAIL",
+                "total_count": 1,
+                "missing_count": 0 if ts_ok else 1,
+                "detail": f"Timestamp rilevato: {doc_metadata['timestamp']}. "
+                + ("Valido UTC ISO-8601/RFC-3339." if ts_ok else "Mancante o non in formato UTC valido."),
+            }
+        )
 
         # Item 3: Document Author / Creator
         auth_ok = doc_metadata["author_valid"]
-        checklist.append({
-            "id": "ENISA-03-CREATOR",
-            "title": "Identità dell'Autore / Creatore SBOM (Email RFC 5322 o URL)",
-            "passed": auth_ok,
-            "status": "PASS" if auth_ok else "WARNING",
-            "total_count": 1,
-            "missing_count": 0 if auth_ok else 1,
-            "detail": f"Contatti censiti: {', '.join(doc_metadata['authors']) if doc_metadata['authors'] else 'Nessuno'}. " +
-                      ("Email o URL validi riscontrati." if auth_ok else "Avviso: contatto autore non conforme RFC 5322/URL."),
-        })
+        checklist.append(
+            {
+                "id": "ENISA-03-CREATOR",
+                "title": "Identità dell'Autore / Creatore SBOM (Email RFC 5322 o URL)",
+                "passed": auth_ok,
+                "status": "PASS" if auth_ok else "WARNING",
+                "total_count": 1,
+                "missing_count": 0 if auth_ok else 1,
+                "detail": f"Contatti censiti: {', '.join(doc_metadata['authors']) if doc_metadata['authors'] else 'Nessuno'}. "
+                + (
+                    "Email o URL validi riscontrati."
+                    if auth_ok
+                    else "Avviso: contatto autore non conforme RFC 5322/URL."
+                ),
+            }
+        )
 
         # Item 4: Tool / Generator Engine Identity
         tool_ok = doc_metadata["tools_valid"]
-        checklist.append({
-            "id": "ENISA-04-TOOL",
-            "title": "Identità del Tool di Generazione (Nome e Versione)",
-            "passed": tool_ok,
-            "status": "PASS" if tool_ok else "WARNING",
-            "total_count": 1,
-            "missing_count": 0 if tool_ok else 1,
-            "detail": f"Tool censiti: {', '.join(doc_metadata['tools']) if doc_metadata['tools'] else 'N/D'}. " +
-                      ("Identità completa registrata." if tool_ok else "Avviso: versione del tool non specificata."),
-        })
+        checklist.append(
+            {
+                "id": "ENISA-04-TOOL",
+                "title": "Identità del Tool di Generazione (Nome e Versione)",
+                "passed": tool_ok,
+                "status": "PASS" if tool_ok else "WARNING",
+                "total_count": 1,
+                "missing_count": 0 if tool_ok else 1,
+                "detail": f"Tool censiti: {', '.join(doc_metadata['tools']) if doc_metadata['tools'] else 'N/D'}. "
+                + ("Identità completa registrata." if tool_ok else "Avviso: versione del tool non specificata."),
+            }
+        )
 
         # Item 5: Generation Context & Lifecycle Phase
         lc_ok = doc_metadata["has_lifecycle"]
-        checklist.append({
-            "id": "ENISA-05-LIFECYCLE",
-            "title": "Fase di Ciclo di Vita (Design, Source, Build, Analysed, Deployed, Runtime)",
-            "passed": lc_ok,
-            "status": "PASS" if lc_ok else "WARNING",
-            "total_count": 1,
-            "missing_count": 0 if lc_ok else 1,
-            "detail": f"Fase rilevata: {doc_metadata['lifecycle_phase']}. " +
-                      ("Contesto di generazione esplicitato." if lc_ok else "Avviso: fase di ciclo di vita non dichiarata esplicitamente."),
-        })
+        checklist.append(
+            {
+                "id": "ENISA-05-LIFECYCLE",
+                "title": "Fase di Ciclo di Vita (Design, Source, Build, Analysed, Deployed, Runtime)",
+                "passed": lc_ok,
+                "status": "PASS" if lc_ok else "WARNING",
+                "total_count": 1,
+                "missing_count": 0 if lc_ok else 1,
+                "detail": f"Fase rilevata: {doc_metadata['lifecycle_phase']}. "
+                + (
+                    "Contesto di generazione esplicitato."
+                    if lc_ok
+                    else "Avviso: fase di ciclo di vita non dichiarata esplicitamente."
+                ),
+            }
+        )
 
         # Item 6: Cryptographic Signature & Attestation
         sig_ok = doc_metadata["has_signature"]
-        checklist.append({
-            "id": "ENISA-06-SIGNATURE",
-            "title": "Firma Crittografica o Attestazione (Cosign / in-toto / Embedded)",
-            "passed": sig_ok,
-            "status": "PASS" if sig_ok else "WARNING",
-            "total_count": 1,
-            "missing_count": 0 if sig_ok else 1,
-            "detail": f"Stato attestazione: {', '.join(doc_metadata['signature_details']) if sig_ok else 'Nessuna firma digitale o attestazione in-toto rilevata.'}",
-        })
+        checklist.append(
+            {
+                "id": "ENISA-06-SIGNATURE",
+                "title": "Firma Crittografica o Attestazione (Cosign / in-toto / Embedded)",
+                "passed": sig_ok,
+                "status": "PASS" if sig_ok else "WARNING",
+                "total_count": 1,
+                "missing_count": 0 if sig_ok else 1,
+                "detail": f"Stato attestazione: {', '.join(doc_metadata['signature_details']) if sig_ok else 'Nessuna firma digitale o attestazione in-toto rilevata.'}",
+            }
+        )
 
         # Item 7: Root Product / Target Subject Definition
         rp = doc_metadata["root_product"]
         rp_ok = bool(rp.get("name") and rp.get("name") != "N/D" and rp.get("version") and rp.get("version") != "N/D")
-        checklist.append({
-            "id": "ENISA-07-ROOT-PRODUCT",
-            "title": "Definizione del Prodotto Primario (Subject Name & Version)",
-            "passed": rp_ok,
-            "status": "PASS" if rp_ok else "FAIL",
-            "total_count": 1,
-            "missing_count": 0 if rp_ok else 1,
-            "detail": f"Prodotto: {rp.get('name')} v{rp.get('version')} ({rp.get('type')}).",
-        })
+        checklist.append(
+            {
+                "id": "ENISA-07-ROOT-PRODUCT",
+                "title": "Definizione del Prodotto Primario (Subject Name & Version)",
+                "passed": rp_ok,
+                "status": "PASS" if rp_ok else "FAIL",
+                "total_count": 1,
+                "missing_count": 0 if rp_ok else 1,
+                "detail": f"Prodotto: {rp.get('name')} v{rp.get('version')} ({rp.get('type')}).",
+            }
+        )
 
         # Item 8: Component Inventory & Baseline Completeness (Name, Version, ID)
         missing_versions = sum(1 for r in matrix_rows if r["has_version"] == "✕")
         missing_ids = sum(1 for r in matrix_rows if r["has_id"] == "✕")
         inv_ok = (missing_versions == 0 and missing_ids == 0) and total_comps > 0
-        checklist.append({
-            "id": "ENISA-08-COMPONENTS",
-            "title": "Completezza Inventario Componenti (Nome, Versione, PURL/CPE)",
-            "passed": inv_ok,
-            "status": "PASS" if inv_ok else ("FAIL" if missing_versions > 0 else "WARNING"),
-            "total_count": total_comps,
-            "missing_count": missing_versions + missing_ids,
-            "detail": f"Totale componenti: {total_comps}. Versioni mancanti: {missing_versions}, Identificatori PURL/CPE mancanti: {missing_ids}.",
-        })
+        checklist.append(
+            {
+                "id": "ENISA-08-COMPONENTS",
+                "title": "Completezza Inventario Componenti (Nome, Versione, PURL/CPE)",
+                "passed": inv_ok,
+                "status": "PASS" if inv_ok else ("FAIL" if missing_versions > 0 else "WARNING"),
+                "total_count": total_comps,
+                "missing_count": missing_versions + missing_ids,
+                "detail": f"Totale componenti: {total_comps}. Versioni mancanti: {missing_versions}, Identificatori PURL/CPE mancanti: {missing_ids}.",
+            }
+        )
 
         # Item 9: Cryptographic Hash Integrity (SHA-256 / SHA-512)
         missing_hashes = stats["missing_hashes_count"]
         # Check if proprietary components miss hashes (critical fail) vs OSS (warning)
         prop_missing_hash = sum(1 for r in matrix_rows if r["is_proprietary"] and r["has_hash"] == "✕")
-        hash_ok = (missing_hashes == 0)
-        checklist.append({
-            "id": "ENISA-09-HASHES",
-            "title": "Integrità Digest Crittografici (SHA-256 o SHA-512)",
-            "passed": hash_ok,
-            "status": "FAIL" if prop_missing_hash > 0 else ("PASS" if hash_ok else "WARNING"),
-            "total_count": total_comps,
-            "missing_count": missing_hashes,
-            "detail": f"Componenti privi di hash crittografico: {missing_hashes} (di cui {prop_missing_hash} proprietari).",
-        })
+        hash_ok = missing_hashes == 0
+        checklist.append(
+            {
+                "id": "ENISA-09-HASHES",
+                "title": "Integrità Digest Crittografici (SHA-256 o SHA-512)",
+                "passed": hash_ok,
+                "status": "FAIL" if prop_missing_hash > 0 else ("PASS" if hash_ok else "WARNING"),
+                "total_count": total_comps,
+                "missing_count": missing_hashes,
+                "detail": f"Componenti privi di hash crittografico: {missing_hashes} (di cui {prop_missing_hash} proprietari).",
+            }
+        )
 
         # Item 10: License Compliance & SPDX Identifiers
         non_spdx = stats["non_spdx_licenses_count"]
         missing_lic = stats["missing_licenses_count"]
         prop_missing_lic = sum(1 for r in matrix_rows if r["is_proprietary"] and r["has_license"] == "✕")
-        lic_ok = (missing_lic == 0 and non_spdx == 0)
-        checklist.append({
-            "id": "ENISA-10-LICENSES",
-            "title": "Conformità Licenze (Espressioni SPDX 3.25+ Standardizzate)",
-            "passed": lic_ok,
-            "status": "FAIL" if prop_missing_lic > 0 else ("PASS" if lic_ok else "WARNING"),
-            "total_count": total_comps,
-            "missing_count": missing_lic + non_spdx,
-            "detail": f"Licenze assenti: {missing_lic}. Licenze non standard (testo libero): {non_spdx}.",
-        })
+        lic_ok = missing_lic == 0 and non_spdx == 0
+        checklist.append(
+            {
+                "id": "ENISA-10-LICENSES",
+                "title": "Conformità Licenze (Espressioni SPDX 3.25+ Standardizzate)",
+                "passed": lic_ok,
+                "status": "FAIL" if prop_missing_lic > 0 else ("PASS" if lic_ok else "WARNING"),
+                "total_count": total_comps,
+                "missing_count": missing_lic + non_spdx,
+                "detail": f"Licenze assenti: {missing_lic}. Licenze non standard (testo libero): {non_spdx}.",
+            }
+        )
 
         # Item 11: Dependency Graph & Relationships
         orphaned = stats["orphaned_count"]
-        dep_ok = (orphaned == 0)
-        checklist.append({
-            "id": "ENISA-11-RELATIONS",
-            "title": "Grafo delle Dipendenze e Relazioni (Tracciabilità Componenti)",
-            "passed": dep_ok,
-            "status": "PASS" if dep_ok else "WARNING",
-            "total_count": total_comps,
-            "missing_count": orphaned,
-            "detail": f"Componenti tracciati nel grafo: {total_comps - orphaned}/{total_comps}. Componenti orfani: {orphaned}.",
-        })
+        dep_ok = orphaned == 0
+        checklist.append(
+            {
+                "id": "ENISA-11-RELATIONS",
+                "title": "Grafo delle Dipendenze e Relazioni (Tracciabilità Componenti)",
+                "passed": dep_ok,
+                "status": "PASS" if dep_ok else "WARNING",
+                "total_count": total_comps,
+                "missing_count": orphaned,
+                "detail": f"Componenti tracciati nel grafo: {total_comps - orphaned}/{total_comps}. Componenti orfani: {orphaned}.",
+            }
+        )
 
         # Item 12: Supplier / Producer Identification (Bifurcated 1st vs 3rd Party)
         missing_supp = sum(1 for r in matrix_rows if r["has_supplier"] == "✕")
         prop_missing_supp = sum(1 for r in matrix_rows if r["is_proprietary"] and r["has_supplier"] == "✕")
-        supp_ok = (missing_supp == 0)
-        checklist.append({
-            "id": "ENISA-12-SUPPLIER",
-            "title": "Identificazione Fornitore / Produttore (Requisito Stringente Proprietari)",
-            "passed": supp_ok,
-            "status": "FAIL" if prop_missing_supp > 0 else ("PASS" if supp_ok else "WARNING"),
-            "total_count": total_comps,
-            "missing_count": missing_supp,
-            "detail": f"Fornitore mancante su {missing_supp} componenti (di cui {prop_missing_supp} proprietari).",
-        })
+        supp_ok = missing_supp == 0
+        checklist.append(
+            {
+                "id": "ENISA-12-SUPPLIER",
+                "title": "Identificazione Fornitore / Produttore (Requisito Stringente Proprietari)",
+                "passed": supp_ok,
+                "status": "FAIL" if prop_missing_supp > 0 else ("PASS" if supp_ok else "WARNING"),
+                "total_count": total_comps,
+                "missing_count": missing_supp,
+                "detail": f"Fornitore mancante su {missing_supp} componenti (di cui {prop_missing_supp} proprietari).",
+            }
+        )
 
         return checklist
 
 
 def audit_enisa_compliance(
-    sbom_dict: Dict[str, Any],
-    file_imprint: Optional[Dict[str, Any]] = None,
+    sbom_dict: dict[str, Any],
+    file_imprint: dict[str, Any] | None = None,
     proprietary_prefix: str = "regubom:proprietary",
-    proprietary_supplier: Optional[str] = None
-) -> Dict[str, Any]:
+    proprietary_supplier: str | None = None,
+) -> dict[str, Any]:
     """Convenience functional interface to EnisaComplianceAuditor."""
-    auditor = EnisaComplianceAuditor(
-        proprietary_prefix=proprietary_prefix,
-        proprietary_supplier=proprietary_supplier
-    )
+    auditor = EnisaComplianceAuditor(proprietary_prefix=proprietary_prefix, proprietary_supplier=proprietary_supplier)
     return auditor.audit(sbom_dict, file_imprint=file_imprint)

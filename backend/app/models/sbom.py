@@ -1,11 +1,15 @@
 """SQLAlchemy models for SBOM records and validation reports."""
+
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Boolean, Float
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String
+
 from app.core.database import Base
 
 
 class SBOMRecord(Base):
     """Model representing an uploaded SBOM file."""
+
     __tablename__ = "sbom_records"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -32,6 +36,7 @@ class SBOMRecord(Base):
 
 class ValidationReport(Base):
     """Model representing a validation report."""
+
     __tablename__ = "validation_reports"
 
     id = Column(Integer, primary_key=True, index=True)

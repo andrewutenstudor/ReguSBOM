@@ -1,17 +1,18 @@
 """Database models for ReguBOM."""
-from app.models.sbom import SBOMRecord, ValidationReport
-from app.models.catalog import Product, ProductRelease, SBOMArtifact
-from app.models.user import User, ApiKey, Role
+
 from app.models.audit import AuditLog
+from app.models.catalog import Product, ProductRelease, SBOMArtifact
+from app.models.sbom import SBOMRecord, ValidationReport
+from app.models.user import ApiKey, Role, User
 
 __all__ = [
-    "SBOMRecord",
-    "ValidationReport",
+    "ApiKey",
+    "AuditLog",
     "Product",
     "ProductRelease",
-    "SBOMArtifact",
-    "User",
-    "ApiKey",
     "Role",
-    "AuditLog",
+    "SBOMArtifact",
+    "SBOMRecord",
+    "User",
+    "ValidationReport",
 ]

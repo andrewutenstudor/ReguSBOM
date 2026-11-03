@@ -3,24 +3,25 @@ ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway
 Local & LDAP Authentication, RBAC Engine, Password Hashing, JWT Sessions & CI/CD API Tokens.
 Compliant with ENISA Table 7 and NIS2 Art. 21 Access Control Requirements.
 """
+
 import base64
 import hashlib
 import hmac
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List, Union, Tuple
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import bcrypt
 from fastapi import Depends, HTTPException, Request, Response, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import get_db, SessionLocal
-from app.models.user import User, ApiKey, Role
+from app.core.database import SessionLocal, get_db
+from app.models.user import ApiKey, Role, User
 
 logger = logging.getLogger("regubom.auth")
 
@@ -70,24 +71,26 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # ------------------------------------------------------------------------------
 # JWT Session Management
 # ------------------------------------------------------------------------------
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create signed JWT access token."""
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_delta:
         expire = now + expires_delta
     else:
         expire = now + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
 
-    to_encode.update({
-        "exp": expire,
-        "iat": now,
-        "iss": "regubom-gateway",
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "iat": now,
+            "iss": "regubom-gateway",
+        }
+    )
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> Optional[dict]:
+def decode_access_token(token: str) -> dict | None:
     """Decode and validate JWT access token."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -108,10 +111,10 @@ def generate_api_key(
     name: str,
     role: str,
     db: Session,
-    user_id: Optional[int] = None,
-    expires_in_days: Optional[int] = None,
-    allowed_products: Optional[List[str]] = None,
-) -> Tuple[ApiKey, str]:
+    user_id: int | None = None,
+    expires_in_days: int | None = None,
+    allowed_products: list[str] | None = None,
+) -> tuple[ApiKey, str]:
     """
     Generate a machine token for CI/CD pipelines (e.g., rgb_live_...).
     Supports least-privilege scoping to specific product slugs or ['*'].
@@ -150,7 +153,7 @@ def generate_api_key(
 # ------------------------------------------------------------------------------
 async def get_current_user(
     request: Request,
-    bearer_auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
+    bearer_auth: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     db: Session = Depends(get_db),
 ) -> User:
     """
@@ -160,7 +163,7 @@ async def get_current_user(
       2. Authorization: Bearer <token> (JWT token or machine token)
       3. access_token cookie (HTTP-only browser session)
     """
-    token: Optional[str] = None
+    token: str | None = None
 
     # 1. Check X-API-Key header
     api_key_header = request.headers.get("X-API-Key")
@@ -206,9 +209,9 @@ async def get_current_user(
         if api_key.user and api_key.user.is_active:
             user = api_key.user
             user.role = api_key.role
-            setattr(user, "allowed_products", allowed)
-            setattr(user, "is_machine_token", True)
-            setattr(user, "api_key_id", api_key.id)
+            user.allowed_products = allowed
+            user.is_machine_token = True
+            user.api_key_id = api_key.id
             return user
 
         synthetic_user = User(
@@ -219,9 +222,9 @@ async def get_current_user(
             is_active=True,
             full_name=f"CI/CD Pipeline ({api_key.name})",
         )
-        setattr(synthetic_user, "allowed_products", allowed)
-        setattr(synthetic_user, "is_machine_token", True)
-        setattr(synthetic_user, "api_key_id", api_key.id)
+        synthetic_user.allowed_products = allowed
+        synthetic_user.is_machine_token = True
+        synthetic_user.api_key_id = api_key.id
         return synthetic_user
 
     # Handle JWT Bearer Token
@@ -240,7 +243,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    username: Optional[str] = payload.get("sub") or payload.get("username")
+    username: str | None = payload.get("sub") or payload.get("username")
     if not username:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -262,12 +265,14 @@ async def get_current_user(
             detail=f"UserDisabled: Account '{username}' is disabled.",
         )
 
-    setattr(user, "allowed_products", ["*"])
-    setattr(user, "is_machine_token", False)
+    user.allowed_products = ["*"]
+    user.is_machine_token = False
     return user
 
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+async def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
     """Dependency verifying user is active."""
     if not current_user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user account")
@@ -277,7 +282,7 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 # ------------------------------------------------------------------------------
 # RBAC Route Authorization Dependency Factory
 # ------------------------------------------------------------------------------
-def require_role(allowed_roles: Union[List[str], str]):
+def require_role(allowed_roles: list[str] | str):
     """
     FastAPI dependency guarding endpoints by role.
     Role hierarchy:
@@ -295,13 +300,15 @@ def require_role(allowed_roles: Union[List[str], str]):
         normalized_allowed.add(Role.OPERATOR)
         normalized_allowed.add(Role.ADMIN)
 
-    async def _role_guard(current_user: User = Depends(get_current_active_user)) -> User:
+    async def _role_guard(
+        current_user: User = Depends(get_current_active_user),
+    ) -> User:
         user_role = Role.normalize(current_user.role)
         if user_role not in normalized_allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"PermissionDenied: User '{current_user.username}' with role '{user_role}' "
-                       f"is not authorized. Required: {sorted(list(normalized_allowed))}",
+                f"is not authorized. Required: {sorted(list(normalized_allowed))}",
             )
         return current_user
 
@@ -379,16 +386,17 @@ def seed_default_users(db: Session) -> None:
 
     db.commit()
 
+
 __all__ = [
     "Role",
-    "get_password_hash",
-    "verify_password",
     "create_access_token",
     "decode_access_token",
-    "hash_api_key",
     "generate_api_key",
-    "get_current_user",
     "get_current_active_user",
+    "get_current_user",
+    "get_password_hash",
+    "hash_api_key",
     "require_role",
     "seed_default_users",
+    "verify_password",
 ]

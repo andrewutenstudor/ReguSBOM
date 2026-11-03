@@ -4,10 +4,12 @@ Air-Gap Schema Engine & Strict Offline JSON Schema Validator.
 Compiles and executes JSON schemas (CycloneDX 1.4-1.7, SPDX 2.3-3.0.1)
 exclusively from the local directory with zero HTTP/network fallback.
 """
+
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, Callable
+from typing import Any
 
 import fastjsonschema
 from fastjsonschema.exceptions import JsonSchemaException
@@ -17,7 +19,7 @@ logger = logging.getLogger("regubom.schemas")
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
 
 # Schema registry map
-SCHEMA_FILES: Dict[Tuple[str, str], str] = {
+SCHEMA_FILES: dict[tuple[str, str], str] = {
     ("cyclonedx", "1.4"): "bom-1.4.schema.json",
     ("cyclonedx", "1.5"): "bom-1.5.schema.json",
     ("cyclonedx", "1.6"): "bom-1.6.schema.json",
@@ -28,10 +30,10 @@ SCHEMA_FILES: Dict[Tuple[str, str], str] = {
 }
 
 # Compiled validator cache: (format, version) -> compiled_func
-_VALIDATOR_CACHE: Dict[Tuple[str, str], Callable[[Dict[str, Any]], Dict[str, Any]]] = {}
+_VALIDATOR_CACHE: dict[tuple[str, str], Callable[[dict[str, Any]], dict[str, Any]]] = {}
 
 
-def _airgap_uri_handler(uri: str) -> Dict[str, Any]:
+def _airgap_uri_handler(uri: str) -> dict[str, Any]:
     """
     Air-gap handler for fastjsonschema $ref URI resolution.
     Strictly forbids any external HTTP/HTTPS network calls.
@@ -69,7 +71,7 @@ def _airgap_uri_handler(uri: str) -> Dict[str, Any]:
     raise RuntimeError(error_msg)
 
 
-def get_schema_validator(format_name: str, version: str) -> Optional[Callable[[Dict[str, Any]], Dict[str, Any]]]:
+def get_schema_validator(format_name: str, version: str) -> Callable[[dict[str, Any]], dict[str, Any]] | None:
     """
     Returns a cached, precompiled fastjsonschema validator function
     for the requested format and version, compiled in air-gap mode.
@@ -107,7 +109,7 @@ def get_schema_validator(format_name: str, version: str) -> Optional[Callable[[D
             handlers={
                 "http": _airgap_uri_handler,
                 "https": _airgap_uri_handler,
-            }
+            },
         )
         _VALIDATOR_CACHE[key] = compiled_validator
         logger.info(f"[AirGapSchema] Successfully compiled air-gapped validator for {fmt} v{ver}")
@@ -117,7 +119,7 @@ def get_schema_validator(format_name: str, version: str) -> Optional[Callable[[D
         return None
 
 
-def validate_sbom_schema_airgap(sbom_dict: Dict[str, Any], format_name: str, version: str) -> Tuple[bool, Optional[str]]:
+def validate_sbom_schema_airgap(sbom_dict: dict[str, Any], format_name: str, version: str) -> tuple[bool, str | None]:
     """
     Validates an SBOM dictionary against its official schema in air-gap mode.
     Returns (True, None) if compliant, or (False, error_detail) if schema validation fails.
@@ -131,6 +133,9 @@ def validate_sbom_schema_airgap(sbom_dict: Dict[str, Any], format_name: str, ver
         validator(sbom_dict)
         return True, None
     except JsonSchemaException as e:
-        return False, f"Schema validation error: {e.message} (path: {getattr(e, 'path', '/')})"
+        return (
+            False,
+            f"Schema validation error: {e.message} (path: {getattr(e, 'path', '/')})",
+        )
     except Exception as e:
-        return False, f"Schema validation failed: {str(e)}"
+        return False, f"Schema validation failed: {e!s}"
