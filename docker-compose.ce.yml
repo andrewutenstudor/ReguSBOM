@@ -1,6 +1,6 @@
 # ==============================================================================
 # ReguBOM Community Edition (CE) — Docker Compose
-# Open Source, Apache 2.0 Standalone Regulatory Gateway
+# Open Source, GNU AGPLv3 Standalone Regulatory Gateway
 # SQLite Embedded Storage (No PostgreSQL external dependency required)
 # ==============================================================================
 

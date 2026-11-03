@@ -1,6 +1,6 @@
 # ==============================================================================
 # ReguBOM Community Edition (CE) — Frontend Dockerfile
-# Standalone, Open Source (Apache 2.0)
+# Standalone, Open Source (GNU AGPLv3)
 # ==============================================================================
 
 # Stage 1: Build React/Vite app

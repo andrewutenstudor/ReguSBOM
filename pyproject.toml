@@ -1,3 +1,8 @@
+[project]
+name = "regubom"
+version = "2.0.0"
+license = { text = "AGPL-3.0-only" }
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"

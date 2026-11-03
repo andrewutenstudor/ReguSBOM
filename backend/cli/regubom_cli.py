@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ReguBOM — Community Edition (Open Source, Apache 2.0)
+ReguBOM — Community Edition (Open Source, GNU AGPLv3)
 Standalone Headless CLI Regulatory SBOM Scanner & Compliance Validator.
 Compliant with:
 - EU Cyber Resilience Act (Regulation EU 2024/2847 Art. 13 & Annex II)
@@ -76,7 +76,7 @@ def print_cli_report(result: dict[str, Any], imprint: dict[str, Any], filename: 
     checklist = result.get("cra_checklist", [])
 
     print("\n" + "=" * 78)
-    print(f"  ReguBOM Community Edition CLI Scanner v{VERSION} (Apache 2.0)")
+    print(f"  ReguBOM Community Edition CLI Scanner v{VERSION} (GNU AGPLv3)")
     print("  EU CRA Art. 13 & ENISA Oct 2026 Regulatory Verification")
     print("=" * 78)
 
@@ -140,7 +140,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="regubom",
-        description="ReguBOM Community Edition — Standalone Headless Regulatory SBOM Scanner (Apache 2.0)",
+        description="ReguBOM Community Edition — Standalone Headless Regulatory SBOM Scanner (GNU AGPLv3)",
     )
     parser.add_argument("file", help="Path to SBOM file (CycloneDX JSON or SPDX JSON)")
     parser.add_argument(

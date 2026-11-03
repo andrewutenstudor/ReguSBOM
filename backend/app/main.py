@@ -1,7 +1,7 @@
 """
 Main FastAPI application for ReguBOM — Regulatory SBOM Gateway.
 Open-Core Architecture:
-- Community Edition (CE): Open-Source (Apache 2.0) standalone SBOM validator and viewer.
+- Community Edition (CE): Open-Source (GNU AGPLv3) standalone SBOM validator and viewer.
 - Enterprise Edition (EE): Commercial add-on loaded dynamically via ee.loader hook.
 Compliant with EU Cyber Resilience Act (CRA Art. 13), ENISA Technical Advisory (October 2026),
 BSI TR-03183-2 v2.1.0, and CISA 2026 Minimum Elements.

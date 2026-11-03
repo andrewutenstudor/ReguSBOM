@@ -1,7 +1,7 @@
 # ReguBOM — Open-Source EU Cyber Resilience Act (CRA) & ENISA SBOM Regulatory Gateway
 
 [![ReguBOM CE CI](https://github.com/andrewutenstudor/ReguSBOM/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewutenstudor/ReguSBOM/actions/workflows/ci.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Compliance](https://img.shields.io/badge/Compliance-CRA_Art._13_%7C_ENISA_2026-blue.svg)](#)
 [![Formats](https://img.shields.io/badge/Formats-CycloneDX_1.7_%7C_SPDX_3.0.1-green.svg)](#)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://python.org)
@@ -101,11 +101,11 @@ ReguBOM is designed from the ground up for strict national security, defense, an
 
 ## 🏛️ Community Edition (CE) vs Enterprise Edition (EE)
 
-ReguBOM follows an **Open-Core** architecture. The core regulatory validator is 100% open-source and free under Apache 2.0.
+ReguBOM follows an **Open-Core** architecture. The core regulatory validator is 100% open-source and free under GNU AGPLv3.
 
 | Capability | Community Edition (CE) *(Open Source)* | Enterprise Edition (EE) *(Commercial)* |
 |:---|:---:|:---:|
-| **License** | **Apache 2.0** | **Commercial Enterprise** |
+| **License** | **GNU AGPLv3** | **Commercial Enterprise** |
 | **Deployment Mode** | Standalone Docker / Headless CLI | Helm / Kubernetes (RKE2, OpenShift) / Compose |
 | **Database** | Embedded SQLite / Local Engine | PostgreSQL 16 Cluster + TimescaleDB |
 | **ENISA 12-Point Checklist** | ✅ Included | ✅ Included |
@@ -163,5 +163,7 @@ python backend/cli/regubom_cli.py scan backend/sample_ce_sbom.json
 
 ## 📄 License & Attributions
 
-- **ReguBOM Community Edition** is licensed under the [Apache License 2.0](LICENSE).
+- **ReguBOM Community Edition** is licensed under the [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE).
+  Derivative works, modifications, or network-hosted deployments must make complete source code available under the same license.
+  For commercial, closed-source, or non-copyleft enterprise licensing without AGPL requirements, see **ReguBOM Enterprise**.
 - Integrates the foundational `modulo_SBOM` validator authored by the Italian National Cybersecurity Agency (**ACN** — *Agenzia per la Cybersicurezza Nazionale*), licensed under **EUPL v1.2**.

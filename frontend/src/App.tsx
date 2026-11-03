@@ -256,7 +256,7 @@ function App() {
                     <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
                     <span className="font-semibold">Community Edition</span>
                     <span className="text-slate-400">•</span>
-                    <span className="font-mono text-[11px] text-slate-500">v2.0.0-ce (Apache 2.0)</span>
+                    <span className="font-mono text-[11px] text-slate-500">v2.0.0-ce (AGPLv3)</span>
                   </div>
                 </div>
               )}
@@ -300,7 +300,7 @@ function App() {
           <p>
             {isEE
               ? 'Compliant with EU Cyber Resilience Act (Regulation EU 2024/2847 Art. 13 & Annex II), ENISA Technical Advisory on SBOM (October 2026), and BSI TR-03183-2 v2.1.0.'
-              : 'Released under Apache License 2.0. Fully compliant with EU Cyber Resilience Act (Regulation EU 2024/2847 Art. 13 & Annex II), ENISA Technical Advisory on SBOM (October 2026), and BSI TR-03183-2 v2.1.0.'}
+              : 'Released under GNU Affero General Public License v3.0 (AGPLv3). Fully compliant with EU Cyber Resilience Act (Regulation EU 2024/2847 Art. 13 & Annex II), ENISA Technical Advisory on SBOM (October 2026), and BSI TR-03183-2 v2.1.0.'}
           </p>
           <p className="text-slate-400 text-[11px] pt-1">
             Accepts CycloneDX v1.6 &amp; v1.7 (ECMA-424) and SPDX v2.3 &amp; v3.0.1 (ISO/IEC 5962:2021). Zero external runtime telemetry.

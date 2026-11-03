@@ -1,4 +1,4 @@
-# ReguBOM Community Edition (CE) — Dockerfile (Open Source, Apache 2.0)
+# ReguBOM Community Edition (CE) — Dockerfile (Open Source, GNU AGPLv3)
 FROM python:3.12-slim
 
 # Install system dependencies

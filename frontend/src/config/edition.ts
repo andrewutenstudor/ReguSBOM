@@ -1,6 +1,6 @@
 /**
  * ReguBOM — Edition Configuration & Feature Flags.
- * Clean abstraction separating Community Edition (Open Source, Apache 2.0)
+ * Clean abstraction separating Community Edition (Open Source, GNU AGPLv3)
  * from Enterprise Edition (Commercial Add-on).
  */
 
@@ -17,9 +17,9 @@ export const EDITION_CONFIG = {
   edition: isEE ? 'enterprise' : 'community',
   name: isEE ? 'ReguBOM Enterprise Edition' : 'ReguBOM Community Edition',
   shortName: isEE ? 'ReguBOM EE' : 'ReguBOM CE',
-  version: isEE ? 'v2.0.0 (Enterprise Sovereign)' : 'v2.0.0-ce (Apache 2.0)',
-  badge: isEE ? 'Enterprise Sovereign' : 'Open Source (Apache 2.0)',
-  licenseText: isEE ? 'Air-Gapped Sovereign Commercial License' : 'Apache License, Version 2.0',
+  version: isEE ? 'v2.0.0 (Enterprise Sovereign)' : 'v2.0.0-ce (GNU AGPLv3)',
+  badge: isEE ? 'Enterprise Sovereign' : 'Open Source (AGPLv3)',
+  licenseText: isEE ? 'Air-Gapped Sovereign Commercial License' : 'GNU Affero General Public License v3.0 (AGPLv3)',
   features: {
     auth: isEE,
     catalog: isEE,
