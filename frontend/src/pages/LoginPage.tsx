@@ -149,9 +149,11 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-primary-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 text-slate-100">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-primary-600/20 border border-primary-500/30 flex items-center justify-center text-3xl shadow-inner">
-            🛡️
-          </div>
+          <img
+            src="/logo.jpeg"
+            alt="ReguBOM Logo"
+            className="w-12 h-12 rounded-xl object-contain shadow-lg border border-slate-700/60 bg-slate-800"
+          />
           <div>
             <h2 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
               ReguBOM

@@ -13,6 +13,7 @@ import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SecuritySettingsPage from './pages/SecuritySettingsPage';
 import SecuritySettingsModal from './components/SecuritySettingsModal';
+import { Footer } from './components/Footer';
 import apiService from './services/api';
 import { LicenseInfo } from './types';
 import { useAuth } from './context/AuthContext';
@@ -125,22 +126,27 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-50">
+      <header className="bg-slate-900 shadow-md border-b border-slate-800 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <Link to="/" className="flex-shrink-0 flex items-center gap-2 group">
-                <span className="text-2xl">🛡️</span>
-                <span className="text-xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary-600 transition-colors">
-                  {EDITION_CONFIG.name}
-                </span>
-                <span className={`ml-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                  isEE
-                    ? 'text-primary-700 bg-primary-50 border border-primary-200'
-                    : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                }`}>
-                  {EDITION_CONFIG.badge}
-                </span>
+              <Link to="/" className="flex-shrink-0 group">
+                <div className="flex items-center gap-3">
+                  <img 
+                    src="/logo.jpeg" 
+                    alt="ReguBOM Logo" 
+                    className="h-9 w-auto rounded-md shadow-sm border border-slate-700/50 object-contain"
+                  />
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold tracking-tight text-white">ReguBOM</span>
+                      <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        {isEE ? 'Enterprise CRA' : 'CRA Gateway'}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 -mt-0.5">Regulatory SBOM Ledger</span>
+                  </div>
+                </div>
               </Link>
               <nav className="ml-10 flex space-x-6">
                 {navLinks.map((link) => (
@@ -149,8 +155,8 @@ function App() {
                     to={link.path}
                     className={`${
                       location.pathname === link.path
-                        ? 'border-primary-600 text-primary-700 font-bold'
-                        : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300 font-medium'
+                        ? 'border-blue-500 text-blue-400 font-bold'
+                        : 'border-transparent text-slate-300 hover:text-white hover:border-slate-500 font-medium'
                     } whitespace-nowrap pb-1.5 px-1 border-b-2 text-sm transition-all`}
                   >
                     {link.name}
@@ -169,23 +175,23 @@ function App() {
                       onClick={() => setIsLicModalOpen(true)}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs transition-all ${
                         license.valid
-                          ? 'bg-slate-50 border-slate-200 hover:border-slate-300 text-slate-800'
-                          : 'bg-rose-50 border-rose-200 text-rose-800 font-bold animate-pulse'
+                          ? 'bg-slate-800/80 border-slate-700 hover:border-slate-600 text-slate-200'
+                          : 'bg-rose-950/50 border-rose-800 text-rose-300 font-bold animate-pulse'
                       }`}
                       title="Gestione Licenza Crittografica Air-Gap (Ed25519)"
                     >
                       <span className="text-sm">🔒</span>
                       <div className="text-left hidden sm:block">
                         <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
-                          <span className="truncate max-w-[140px]">{license.customer_name}</span>
-                          <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded text-[9px] font-black uppercase tracking-wider">
+                          <span className="truncate max-w-[140px] text-white">{license.customer_name}</span>
+                          <span className="px-1.5 py-0.2 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 rounded text-[9px] font-black uppercase tracking-wider">
                             {license.tier || 'Air-Gapped Sovereign'}
                           </span>
                         </div>
-                        <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
                           {license.valid ? (
                             <>
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.6)]"></span>
                               <span>
                                 {license.days_remaining > 0
                                   ? `${license.days_remaining} giorni rimasti`
@@ -193,7 +199,7 @@ function App() {
                               </span>
                             </>
                           ) : (
-                            <span className="text-rose-600 font-bold">
+                            <span className="text-rose-400 font-bold">
                               Licenza Scaduta / Non Valida
                             </span>
                           )}
@@ -205,18 +211,18 @@ function App() {
 
                   {/* User Session Profile & Role Badge */}
                   {user ? (
-                    <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200">
+                    <div className="flex items-center gap-2.5 pl-3 border-l border-slate-700">
                       <div className="text-right hidden md:block">
-                        <div className="text-xs font-bold text-slate-900 leading-tight">
+                        <div className="text-xs font-bold text-white leading-tight">
                           {user.full_name || user.username}
                         </div>
                         <div className="flex justify-end">
                           <span className={`inline-block px-1.5 py-0.2 text-[9px] font-black uppercase rounded tracking-wider ${
                             user.role === 'admin'
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                              ? 'bg-rose-950/60 text-rose-300 border border-rose-800'
                               : user.role === 'operator'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                              : 'bg-purple-100 text-purple-800 border border-purple-200'
+                              ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800'
+                              : 'bg-purple-950/60 text-purple-300 border border-purple-800'
                           }`}>
                             {user.role}
                           </span>
@@ -225,7 +231,7 @@ function App() {
                       <button
                         type="button"
                         onClick={() => setIsSecurityModalOpen(true)}
-                        className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-slate-100 rounded-lg transition-colors text-xs font-medium flex items-center gap-1"
+                        className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors text-xs font-medium flex items-center gap-1"
                         title="Impostazioni Sicurezza, MFA e Machine Tokens"
                       >
                         <span>⚙️</span>
@@ -234,7 +240,7 @@ function App() {
                       <button
                         type="button"
                         onClick={logout}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors text-xs font-medium flex items-center gap-1"
+                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors text-xs font-medium flex items-center gap-1"
                         title="Disconnetti sessione"
                       >
                         <span>🚪</span>
@@ -244,7 +250,7 @@ function App() {
                   ) : (
                     <Link
                       to="/login"
-                      className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors"
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-sm transition-colors"
                     >
                       Accedi
                     </Link>
@@ -252,11 +258,11 @@ function App() {
                 </>
               ) : (
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-700">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                    <span className="font-semibold">Community Edition</span>
-                    <span className="text-slate-400">•</span>
-                    <span className="font-mono text-[11px] text-slate-500">v2.0.0-ce (AGPLv3)</span>
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 text-xs text-slate-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_8px_rgba(52,211,153,0.5)]"></span>
+                    <span className="font-semibold text-slate-200">Community Edition</span>
+                    <span className="text-slate-500">•</span>
+                    <span className="font-mono text-[11px] text-slate-400">v2.0.0-ce (AGPLv3)</span>
                   </div>
                 </div>
               )}
@@ -290,23 +296,7 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-6 mt-16 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-1">
-          <p className="font-semibold text-slate-700">
-            {isEE
-              ? 'ReguBOM — Enterprise Cyber Resilience & Regulatory SBOM Gateway'
-              : 'ReguBOM Community Edition — Open-Source Regulatory SBOM Gateway'}
-          </p>
-          <p>
-            {isEE
-              ? 'Compliant with EU Cyber Resilience Act (Regulation EU 2024/2847 Art. 13 & Annex II), ENISA Technical Advisory on SBOM (October 2026), and BSI TR-03183-2 v2.1.0.'
-              : 'Released under GNU Affero General Public License v3.0 (AGPLv3). Fully compliant with EU Cyber Resilience Act (Regulation EU 2024/2847 Art. 13 & Annex II), ENISA Technical Advisory on SBOM (October 2026), and BSI TR-03183-2 v2.1.0.'}
-          </p>
-          <p className="text-slate-400 text-[11px] pt-1">
-            Accepts CycloneDX v1.6 &amp; v1.7 (ECMA-424) and SPDX v2.3 &amp; v3.0.1 (ISO/IEC 5962:2021). Zero external runtime telemetry.
-          </p>
-        </div>
-      </footer>
+      <Footer />
 
       {/* Offline Cryptographic License Modal */}
       {isEE && isLicModalOpen && (
