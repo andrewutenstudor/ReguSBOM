@@ -19,8 +19,9 @@ ENV VITE_API_URL=${VITE_API_URL}
 
 # Copy only CE frontend files
 COPY tsconfig*.json vite.config.ts tailwind.config.js postcss.config.js index.html ./
-COPY public/ ./public/
 COPY src/ ./src/
+RUN mkdir -p public
+COPY public/ ./public/
 
 # Build standalone production bundle
 RUN npm run build
