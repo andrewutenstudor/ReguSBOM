@@ -18,6 +18,8 @@ services:
       - ce_uploads:/app/uploads
       - ce_reports:/app/reports
     environment:
+      - REGUBOM_EDITION=community
+      - AUTH_REQUIRED=false
       - DATABASE_URL=sqlite:///./data/regubom_ce.db
       - UPLOAD_DIR=/app/uploads
       - REPORT_DIR=/app/reports

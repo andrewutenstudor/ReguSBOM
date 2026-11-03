@@ -12,6 +12,7 @@ Compliant with:
 import argparse
 import hashlib
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -148,6 +149,11 @@ def main():
         help="Optional ReguBOM API endpoint URL (e.g. http://localhost:8000)",
     )
     parser.add_argument(
+        "--api-key",
+        default=os.getenv("REGUBOM_API_KEY"),
+        help="Optional API key for authenticated ReguBOM instances (or env REGUBOM_API_KEY)",
+    )
+    parser.add_argument(
         "--local",
         action="store_true",
         help="Force local regulatory engine execution (requires backend dependencies)",
@@ -237,13 +243,18 @@ def main():
         parts.append(f"--{boundary}--\r\n".encode())
         body_bytes = b"\r\n".join(parts)
 
+        headers = {
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "User-Agent": f"ReguBOM-CLI/{VERSION}",
+        }
+        if args.api_key:
+            headers["X-API-Key"] = args.api_key
+            headers["Authorization"] = f"Bearer {args.api_key}"
+
         req = urllib.request.Request(
             target_url,
             data=body_bytes,
-            headers={
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
-                "User-Agent": f"ReguBOM-CLI/{VERSION}",
-            },
+            headers=headers,
             method="POST",
         )
         try:

@@ -8,6 +8,7 @@ BSI TR-03183-2 v2.1.0, and CISA 2026 Minimum Elements.
 """
 
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,12 +49,15 @@ app.mount("/uploads", StaticFiles(directory=str(settings.UPLOAD_DIR)), name="upl
 app.mount("/reports", StaticFiles(directory=str(settings.REPORT_DIR)), name="reports")
 
 # 2. Dynamic Enterprise Edition Loader Hook
-try:
-    from ee.loader import register_enterprise_extension
+if os.getenv("REGUBOM_EDITION", "").lower() not in ("community", "ce"):
+    try:
+        from ee.loader import register_enterprise_extension
 
-    register_enterprise_extension(app)
-    logger.info("ReguBOM Enterprise Edition extension loaded successfully.")
-except (ImportError, ModuleNotFoundError):
+        register_enterprise_extension(app)
+        logger.info("ReguBOM Enterprise Edition extension loaded successfully.")
+    except (ImportError, ModuleNotFoundError):
+        logger.info("ReguBOM Community Edition running (Open Source).")
+else:
     logger.info("ReguBOM Community Edition running (Open Source).")
 
 

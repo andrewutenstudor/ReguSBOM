@@ -11,6 +11,7 @@ import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 try:
     import orjson
@@ -30,7 +31,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from app.core.auth_hook import require_role
+from app.core.auth_hook import get_optional_user, require_role
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.enisa_engine import audit_enisa_compliance
@@ -94,6 +95,7 @@ async def validate_sbom(
     profile: str | None = Form("ENISA_2026"),
     proprietary_prefix: str | None = Form(None),
     proprietary_supplier: str | None = Form(None),
+    current_user: Any | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     raw_filename = file.filename or "unknown"
