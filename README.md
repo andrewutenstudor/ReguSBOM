@@ -1,10 +1,11 @@
 # ReguBOM — Open-Source EU Cyber Resilience Act (CRA) & ENISA SBOM Regulatory Gateway
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![ReguBOM CE CI](https://github.com/andrewutenstudor/ReguSBOM/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewutenstudor/ReguSBOM/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Compliance](https://img.shields.io/badge/Compliance-CRA_Art._13_%7C_ENISA_2026-blue.svg)](#)
+[![Formats](https://img.shields.io/badge/Formats-CycloneDX_1.7_%7C_SPDX_3.0.1-green.svg)](#)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://python.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![CycloneDX](https://img.shields.io/badge/CycloneDX-1.4%20%7C%201.5%20%7C%201.6%20%7C%201.7-89C441.svg)](https://cyclonedx.org)
-[![SPDX](https://img.shields.io/badge/SPDX-2.3%20%7C%203.0.1-4B7CFE.svg)](https://spdx.dev)
 [![Air-Gap Ready](https://img.shields.io/badge/Air--Gap-Zero--Telemetry-success)](#-zero-telemetry--air-gap-guarantee)
 
 > **ReguBOM Community Edition (CE)** is a production-ready, open-source regulatory gateway for validating, inspecting, and certifying Software Bill of Materials (SBOMs) against the **EU Cyber Resilience Act (Regulation EU 2024/2847 - CRA)**, the **ENISA Technical Advisory on SBOM (October 2026)**, and **BSI TR-03183-2 v2.1.0**.
@@ -17,8 +18,8 @@ Spin up the self-hosted ReguBOM Community Edition stack (FastAPI Backend + React
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/regubom.git
-cd regubom
+git clone https://github.com/andrewutenstudor/ReguSBOM.git
+cd ReguSBOM
 
 # Launch Community Edition stack
 docker compose -f docker-compose.ce.yml up -d
